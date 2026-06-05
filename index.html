@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flamedula ADM - Dashboard MVP</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; connect-src 'self'; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/styles.css">
+</head>
+
+<body>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-block">
+        <div class="logo-bubble">
+          <img src="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png" alt="Logo Flamedula">
+        </div>
+        <div>
+          <strong>Flamedula</strong>
+          <span>Admin MVP</span>
+        </div>
+      </div>
+
+      <nav class="nav-list" aria-label="Navegação principal">
+        <button class="nav-item active" type="button" data-tab="overview">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Visão Geral</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="donors">
+          <i data-lucide="users"></i>
+          <span>Doadores</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="patients">
+          <i data-lucide="activity"></i>
+          <span>Pacientes</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="donations">
+          <i data-lucide="dollar-sign"></i>
+          <span>Doações</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="regions">
+          <i data-lucide="map-pin"></i>
+          <span>Regiões</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="reports">
+          <i data-lucide="file-text"></i>
+          <span>Relatórios</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="settings">
+          <i data-lucide="settings"></i>
+          <span>Configurações</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-note">
+        <span class="status-dot"></span>
+        <div>
+          <strong>MVP demonstrativo</strong>
+          <small>Dados mockados aguardando Supabase</small>
+        </div>
+      </div>
+    </aside>
+
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+    <div class="app-panel">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="icon-button menu-button" type="button" id="btnMobileMenu" aria-label="Abrir menu">
+            <i data-lucide="menu"></i>
+          </button>
+          <div class="logo-bubble topbar-logo">
+            <img src="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png" alt="Logo Flamedula">
+          </div>
+          <div>
+            <p class="eyebrow" id="pageKicker">Dashboard administrativa</p>
+            <h1 id="pageTitle">Visão Geral</h1>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <label class="global-search" for="globalSearch">
+            <i data-lucide="search"></i>
+            <input id="globalSearch" type="search" placeholder="Pesquisar no MVP">
+          </label>
+          <button class="action-button secondary" type="button" id="btnExportCsv">
+            <i data-lucide="download"></i>
+            <span>CSV</span>
+          </button>
+          <button class="icon-button" type="button" id="btnTheme" aria-label="Alternar tema">
+            <i data-lucide="moon"></i>
+          </button>
+          <button class="icon-button danger" type="button" id="btnLogout" aria-label="Sair">
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="tab-panel active" id="tab-overview" data-title="Visão Geral" data-kicker="Indicadores principais">
+          <div class="section-heading">
+            <div>
+              <h2>Panorama do MVP</h2>
+              <p id="lastUpdate">Atualizado agora</p>
+            </div>
+          </div>
+
+          <div class="metrics-grid" id="overviewMetrics"></div>
+
+          <div class="charts-grid">
+            <article class="card chart-card span-2">
+              <div class="card-header">
+                <h3>Cadastros por dia</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartRegistrations"></canvas>
+              </div>
+            </article>
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Doadores x não doadores</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartBloodDonors"></canvas>
+              </div>
+            </article>
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Interesse em medula</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartMarrowInterest"></canvas>
+              </div>
+            </article>
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Pacientes por status</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartPatientStatus"></canvas>
+              </div>
+            </article>
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Doações por período</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartDonationPeriod"></canvas>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="tab-donors" data-title="Doadores" data-kicker="Leads e cadastros">
+          <div class="section-heading">
+            <div>
+              <h2>Doadores cadastrados</h2>
+              <p id="donorResultCount">0 registros</p>
+            </div>
+          </div>
+
+          <div class="filters-grid">
+            <label>
+              <span>Estado</span>
+              <select id="donorStateFilter"></select>
+            </label>
+            <label>
+              <span>Tipo sanguíneo</span>
+              <select id="donorBloodFilter"></select>
+            </label>
+            <label>
+              <span>Interesse em medula</span>
+              <select id="donorMarrowFilter">
+                <option value="">Todos</option>
+                <option value="sim">Quer doar</option>
+                <option value="nao">Não quer doar</option>
+              </select>
+            </label>
+            <label>
+              <span>Status</span>
+              <select id="donorStatusFilter"></select>
+            </label>
+            <button class="action-button ghost" type="button" id="btnClearDonorFilters">
+              <i data-lucide="x"></i>
+              <span>Limpar</span>
+            </button>
+          </div>
+
+          <article class="card table-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th>Email</th>
+                    <th>Cidade/Estado</th>
+                    <th>Idade</th>
+                    <th>Peso</th>
+                    <th>Tipo sanguíneo</th>
+                    <th>Já doa sangue</th>
+                    <th>Quer medula</th>
+                    <th>Status</th>
+                    <th>Cadastro</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="donorsTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="tab-patients" data-title="Pacientes" data-kicker="Casos e hospitais">
+          <div class="section-heading">
+            <div>
+              <h2>Pacientes acompanhados</h2>
+              <p>Visão clínica do protótipo</p>
+            </div>
+          </div>
+
+          <div class="metrics-grid compact" id="patientMetrics"></div>
+
+          <article class="card table-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Paciente</th>
+                    <th>Idade</th>
+                    <th>Diagnóstico</th>
+                    <th>Hospital</th>
+                    <th>Cidade/Estado</th>
+                    <th>Tipo sanguíneo</th>
+                    <th>Necessita medula</th>
+                    <th>Médico</th>
+                    <th>CRM</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="patientsTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="tab-donations" data-title="Doações" data-kicker="Arrecadação monetária">
+          <div class="section-heading">
+            <div>
+              <h2>Doações monetárias</h2>
+              <p>Valores fictícios para demonstração</p>
+            </div>
+          </div>
+
+          <div class="metrics-grid compact" id="donationMetrics"></div>
+
+          <article class="card chart-card">
+            <div class="card-header">
+              <h3>Arrecadação por período</h3>
+            </div>
+            <div class="chart-box">
+              <canvas id="chartDonationTab"></canvas>
+            </div>
+          </article>
+
+          <article class="card table-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Valor</th>
+                    <th>Método</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="donationsTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="tab-panel" id="tab-regions" data-title="Regiões" data-kicker="Distribuição estratégica">
+          <div class="section-heading">
+            <div>
+              <h2>Mapa operacional</h2>
+              <p>Rankings por estado, cidade e demanda</p>
+            </div>
+          </div>
+
+          <div class="insight-grid">
+            <article class="card">
+              <div class="card-header">
+                <h3>Estados com mais doadores</h3>
+              </div>
+              <ol class="ranking-list" id="stateRanking"></ol>
+            </article>
+            <article class="card">
+              <div class="card-header">
+                <h3>Cidades com mais cadastros</h3>
+              </div>
+              <ol class="ranking-list" id="cityRanking"></ol>
+            </article>
+            <article class="card">
+              <div class="card-header">
+                <h3>Pacientes por estado</h3>
+              </div>
+              <ol class="ranking-list" id="patientStateRanking"></ol>
+            </article>
+            <article class="card">
+              <div class="card-header">
+                <h3>Demanda por tipo sanguíneo</h3>
+              </div>
+              <ol class="ranking-list" id="bloodDemandRanking"></ol>
+            </article>
+          </div>
+
+          <div class="charts-grid">
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Distribuição regional</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartRegionalDistribution"></canvas>
+              </div>
+            </article>
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Demanda sanguínea</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartBloodDemand"></canvas>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="tab-reports" data-title="Relatórios" data-kicker="Exportação e filtros">
+          <div class="section-heading">
+            <div>
+              <h2>Relatório consolidado</h2>
+              <p>Filtros aplicados sobre dados mockados</p>
+            </div>
+            <button class="action-button primary" type="button" id="btnReportExport">
+              <i data-lucide="file-down"></i>
+              <span>Exportar CSV</span>
+            </button>
+          </div>
+
+          <div class="filters-grid">
+            <label>
+              <span>Período</span>
+              <select id="reportPeriodFilter">
+                <option value="all">Todo o período</option>
+                <option value="7">Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="60">Últimos 60 dias</option>
+                <option value="90">Últimos 90 dias</option>
+              </select>
+            </label>
+            <label>
+              <span>Estado</span>
+              <select id="reportStateFilter"></select>
+            </label>
+            <label>
+              <span>Tipo sanguíneo</span>
+              <select id="reportBloodFilter"></select>
+            </label>
+          </div>
+
+          <article class="card report-summary">
+            <div class="card-header">
+              <h3>Resumo estatístico</h3>
+            </div>
+            <p id="reportSummaryText"></p>
+          </article>
+
+          <div class="metrics-grid compact" id="reportMetrics"></div>
+        </section>
+
+        <section class="tab-panel" id="tab-settings" data-title="Configurações" data-kicker="Status do protótipo">
+          <div class="settings-layout">
+            <article class="card settings-card">
+              <div class="brand-block settings-brand">
+                <div class="logo-bubble">
+                  <img src="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png" alt="Logo Flamedula">
+                </div>
+                <div>
+                  <strong>Flamedula ADM</strong>
+                  <span>Versão MVP de demonstração</span>
+                </div>
+              </div>
+              <div class="status-stack">
+                <div class="status-row">
+                  <span>Status do MVP</span>
+                  <strong class="badge positive">Operacional com mocks</strong>
+                </div>
+                <div class="status-row">
+                  <span>Status Supabase</span>
+                  <strong class="badge info">Placeholder aguardando integração</strong>
+                </div>
+                <div class="status-row">
+                  <span>Login de teste</span>
+                  <strong class="badge warning">Fake para protótipo</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="card settings-card">
+              <div class="card-header">
+                <h3>Credenciais do protótipo</h3>
+              </div>
+              <div class="credential-grid">
+                <div>
+                  <span>Login</span>
+                  <strong>flamedula10</strong>
+                </div>
+                <div>
+                  <span>Senha</span>
+                  <strong>12345</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="card settings-card">
+              <div class="card-header">
+                <h3>Próximos passos de integração</h3>
+              </div>
+              <ul class="check-list">
+                <li>Configurar URL e anon key via ambiente seguro.</li>
+                <li>Criar tabelas donor_leads, patients e monetary_donations.</li>
+                <li>Substituir mocks por queries reais com Supabase Auth.</li>
+                <li>Manter service_role fora do frontend.</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="detailModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow" id="modalKicker">Detalhes</p>
+          <h2 id="modalTitle">Registro</h2>
+        </div>
+        <button class="icon-button" type="button" id="btnCloseModal" aria-label="Fechar modal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" src="./assets/js/app.js"></script>
+</body>
+
+</html>

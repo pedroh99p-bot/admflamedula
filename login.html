@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Flamedula ADM</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; connect-src 'self'; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/styles.css">
+</head>
+
+<body class="login-page">
+  <main class="login-shell">
+    <section class="login-card" aria-labelledby="loginTitle">
+      <div class="logo-bubble login-logo">
+        <img src="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png" alt="Logo Flamedula">
+      </div>
+
+      <p class="eyebrow">Dashboard administrativa</p>
+      <h1 id="loginTitle">Acesso Flamedula ADM</h1>
+      <p class="login-subtitle">Ambiente MVP com dados fictícios para demonstração institucional.</p>
+
+      <form id="loginForm" novalidate>
+        <label class="field">
+          <span>Login</span>
+          <input id="loginUser" name="login" type="text" autocomplete="username" placeholder="flamedula10" required>
+        </label>
+
+        <label class="field">
+          <span>Senha</span>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="12345" required>
+        </label>
+
+        <div class="login-error" id="loginError" role="alert" aria-live="polite"></div>
+
+        <button class="action-button primary login-submit" type="submit" id="btnLogin">
+          <i data-lucide="log-in"></i>
+          <span>Entrar</span>
+        </button>
+      </form>
+
+      <div class="prototype-credentials">
+        <span>Protótipo</span>
+        <strong>flamedula10 / 12345</strong>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast-container"></div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="module" src="./assets/js/auth.js"></script>
+</body>
+
+</html>
