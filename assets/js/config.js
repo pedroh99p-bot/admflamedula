@@ -1,0 +1,4 @@
+window.FLAMEDULA_CONFIG = {
+  SUPABASE_URL: "https://javakacjomavyocnwejt.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphdmFrYWNqb21hdnlvY253ZWp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2NTE5NzgsImV4cCI6MjA5NjIyNzk3OH0.ITX193EJo_Zy6rnelpnEh0vzDWFfqYNJICCgKF6QBMA"
+};

@@ -7,6 +7,28 @@ import {
 } from "./utils.js";
 
 const charts = new Map();
+const emptyStatePlugin = {
+  id: "flamedulaEmptyState",
+  afterDraw(chart, _args, pluginOptions) {
+    if (!pluginOptions?.isEmpty) return;
+
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return;
+
+    const message = pluginOptions.message || "Nenhum dado disponivel";
+    ctx.save();
+    ctx.fillStyle = chartColors().muted;
+    ctx.font = "700 14px Outfit";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(
+      message,
+      chartArea.left + (chartArea.right - chartArea.left) / 2,
+      chartArea.top + (chartArea.bottom - chartArea.top) / 2
+    );
+    ctx.restore();
+  }
+};
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -34,7 +56,10 @@ function createChart(id, config) {
     charts.get(id).destroy();
   }
 
-  charts.set(id, new Chart(canvas, config));
+  charts.set(id, new Chart(canvas, {
+    plugins: [emptyStatePlugin],
+    ...config
+  }));
 }
 
 function baseOptions(extra = {}) {
@@ -114,7 +139,13 @@ export function renderOverviewCharts(donors, patients, donations) {
         fill: true
       }]
     },
-    options: baseOptions({ plugins: { ...baseOptions().plugins, legend: { display: false } } })
+    options: baseOptions({
+      plugins: {
+        ...baseOptions().plugins,
+        legend: { display: false },
+        flamedulaEmptyState: { isEmpty: donors.length === 0 }
+      }
+    })
   });
 
   createChart("chartBloodDonors", {
@@ -133,7 +164,11 @@ export function renderOverviewCharts(donors, patients, donations) {
     },
     options: baseOptions({
       cutout: "66%",
-      scales: {}
+      scales: {},
+      plugins: {
+        ...baseOptions().plugins,
+        flamedulaEmptyState: { isEmpty: donors.length === 0 }
+      }
     })
   });
 
@@ -151,7 +186,13 @@ export function renderOverviewCharts(donors, patients, donations) {
         borderRadius: 8
       }]
     },
-    options: baseOptions({ plugins: { ...baseOptions().plugins, legend: { display: false } } })
+    options: baseOptions({
+      plugins: {
+        ...baseOptions().plugins,
+        legend: { display: false },
+        flamedulaEmptyState: { isEmpty: donors.length === 0 }
+      }
+    })
   });
 
   createChart("chartPatientStatus", {
@@ -167,7 +208,11 @@ export function renderOverviewCharts(donors, patients, donations) {
     },
     options: baseOptions({
       indexAxis: "y",
-      plugins: { ...baseOptions().plugins, legend: { display: false } }
+      plugins: {
+        ...baseOptions().plugins,
+        legend: { display: false },
+        flamedulaEmptyState: { isEmpty: patients.length === 0 }
+      }
     })
   });
 
@@ -194,7 +239,8 @@ export function renderOverviewCharts(donors, patients, donations) {
           callbacks: {
             label: (context) => formatCurrency(context.parsed.y)
           }
-        }
+        },
+        flamedulaEmptyState: { isEmpty: donations.length === 0 }
       }
     })
   });
@@ -211,7 +257,11 @@ export function renderOverviewCharts(donors, patients, donations) {
       }]
     },
     options: baseOptions({
-      plugins: { ...baseOptions().plugins, legend: { display: false } }
+      plugins: {
+        ...baseOptions().plugins,
+        legend: { display: false },
+        flamedulaEmptyState: { isEmpty: donors.length === 0 }
+      }
     })
   });
 }
@@ -240,7 +290,8 @@ export function renderDonationChart(donations) {
           callbacks: {
             label: (context) => formatCurrency(context.parsed.y)
           }
-        }
+        },
+        flamedulaEmptyState: { isEmpty: donations.length === 0 }
       }
     })
   });
@@ -262,7 +313,13 @@ export function renderRegionCharts(donors, patients) {
         borderRadius: 8
       }]
     },
-    options: baseOptions({ plugins: { ...baseOptions().plugins, legend: { display: false } } })
+    options: baseOptions({
+      plugins: {
+        ...baseOptions().plugins,
+        legend: { display: false },
+        flamedulaEmptyState: { isEmpty: donors.length === 0 }
+      }
+    })
   });
 
   createChart("chartBloodDemand", {
@@ -278,7 +335,11 @@ export function renderRegionCharts(donors, patients) {
     },
     options: baseOptions({
       cutout: "58%",
-      scales: {}
+      scales: {},
+      plugins: {
+        ...baseOptions().plugins,
+        flamedulaEmptyState: { isEmpty: patients.length === 0 }
+      }
     })
   });
 }

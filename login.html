@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login - Flamedula ADM</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; connect-src 'self'; frame-ancestors 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; connect-src 'self' https://javakacjomavyocnwejt.supabase.co; frame-ancestors 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="DENY">
   <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -24,17 +24,17 @@
 
       <p class="eyebrow">Dashboard administrativa</p>
       <h1 id="loginTitle">Acesso Flamedula ADM</h1>
-      <p class="login-subtitle">Ambiente MVP com dados fictícios para demonstração institucional.</p>
+      <p class="login-subtitle">Entre com um usuario administrativo criado no Supabase Auth.</p>
 
       <form id="loginForm" novalidate>
         <label class="field">
-          <span>Login</span>
-          <input id="loginUser" name="login" type="text" autocomplete="username" placeholder="flamedula10" required>
+          <span>Email</span>
+          <input id="loginEmail" name="email" type="email" autocomplete="username" placeholder="admin@flamedula.com" required>
         </label>
 
         <label class="field">
           <span>Senha</span>
-          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="12345" required>
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
         </label>
 
         <div class="login-error" id="loginError" role="alert" aria-live="polite"></div>
@@ -46,14 +46,16 @@
       </form>
 
       <div class="prototype-credentials">
-        <span>Protótipo</span>
-        <strong>flamedula10 / 12345</strong>
+        <span>Autenticacao</span>
+        <strong>Supabase Auth</strong>
       </div>
     </section>
   </main>
 
   <div id="toast-container"></div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./assets/js/config.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script type="module" src="./assets/js/auth.js"></script>
 </body>

@@ -345,6 +345,25 @@ img {
   padding: 26px;
 }
 
+.dashboard-alert {
+  margin-bottom: 18px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  color: var(--danger);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-soft);
+  font-weight: 800;
+}
+
+.dashboard-alert p {
+  margin: 0;
+}
+
+.dashboard-alert p + p {
+  margin-top: 6px;
+}
+
 .tab-panel {
   display: none;
 }
