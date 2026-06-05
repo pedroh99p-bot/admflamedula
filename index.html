@@ -1,0 +1,858 @@
+<<<<<<< HEAD
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fla Medula - Dashboard</title>
+  <!-- Security Headers -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://mabujqfyxylfkrtxsbti.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="./assets/css/styles.css">
+</head>
+
+<body>
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <i data-lucide="heart"></i>
+        </div>
+        <div class="brand-title">Ela <span>Medula</span></div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Visão Geral</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i data-lucide="users"></i>
+          <span>Cadastros</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i data-lucide="activity"></i>
+          <span>Jornadas</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-illustration">
+          <div class="blob-pink"></div>
+          <i data-lucide="droplet" class="illustration-icon"></i>
+          <p>Cada gota importa.</p>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-wrapper">
+
+      <!-- Internal Header -->
+      <header class="internal-header">
+        <div class="header-greeting">
+          <div class="mobile-menu-wrapper">
+            <button class="btn btn-icon-only mobile-menu-toggle" id="btnMobileMenu">
+              <i data-lucide="menu"></i>
+            </button>
+            <h1>Olá, <span class="text-primary">Equipe</span> <i data-lucide="sparkles" class="text-primary inline-icon"></i></h1>
+          </div>
+          <p>Acompanhe o impacto e o cuidado com nossos doadores hoje.</p>
+        </div>
+        <div class="header-actions">
+          <span class="last-update" id="lastUpdateDate"><i data-lucide="clock" class="inline-icon"></i> -</span>
+          <button class="btn btn-icon-only" id="btnToggleTheme" title="Alternar Tema">
+            <i data-lucide="moon"></i>
+          </button>
+          <button class="btn btn-pill-outline" id="btnExportCsv">
+            <i data-lucide="download"></i>
+            Exportar CSV
+          </button>
+          <div class="profile-area">
+            <div class="avatar">EM</div>
+            <button class="btn btn-icon-only text-danger" id="btnLogout" title="Sair do Sistema">
+              <i data-lucide="log-out"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-content">
+
+        <!-- Filtros -->
+        <section class="filters-section">
+          <div class="filter-group">
+            <label for="filterSearch">Quem você procura?</label>
+            <div class="input-with-icon">
+              <i data-lucide="search"></i>
+              <input type="text" id="filterSearch" class="form-control" placeholder="Nome, email ou WhatsApp...">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label for="filterType">Tipo de Vínculo</label>
+            <select id="filterType" class="form-control">
+              <option value="">Todos os corações</option>
+              <option value="ja_sou_doador">Já sou doador</option>
+              <option value="nao_sou_doador_ainda">Não sou doador ainda</option>
+              <option value="quero_ajudar_divulgar">Quero ajudar/divulgar</option>
+              <option value="instituicao_ou_parceiro">Instituição ou parceiro</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filterStatus">Momento da Jornada</label>
+            <select id="filterStatus" class="form-control">
+              <option value="">Qualquer momento</option>
+              <option value="novo">Novo</option>
+              <option value="boas_vindas_enviada">Boas-vindas enviada</option>
+              <option value="em_educacao">Em educação</option>
+              <option value="interessado">Interessado</option>
+              <option value="orientado">Orientado</option>
+              <option value="cadastrado_no_redome">Cadastrado no REDOME</option>
+              <option value="quer_ajudar">Quer ajudar</option>
+              <option value="sem_resposta">Sem resposta</option>
+              <option value="descadastrado">Descadastrado</option>
+              <option value="invalido">Inválido</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filterOptin">Contato via WhatsApp</label>
+            <select id="filterOptin" class="form-control">
+              <option value="">Todos</option>
+              <option value="sim">Autorizado</option>
+              <option value="nao">Não autorizado</option>
+            </select>
+          </div>
+          <div class="filters-actions">
+            <button class="btn btn-pill-ghost w-full" id="btnClearFilters">
+              <i data-lucide="x"></i>
+              Limpar Filtros
+            </button>
+          </div>
+        </section>
+
+        <!-- Cards de Métricas -->
+        <section class="metrics-grid">
+          <div class="card metric-card featured-metric">
+            <div class="metric-icon-wrapper"><i data-lucide="users"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Total de Vidas Tocadas</div>
+              <div class="metric-value" id="metricTotalLeads">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper soft-red"><i data-lucide="sun"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Novos Hoje</div>
+              <div class="metric-value" id="metricLeadsToday">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper soft-pink"><i data-lucide="calendar"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Últimos 7 dias</div>
+              <div class="metric-value" id="metricLeads7Days">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper soft-pink"><i data-lucide="calendar-days"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Últimos 30 dias</div>
+              <div class="metric-value" id="metricLeads30Days">0</div>
+            </div>
+          </div>
+
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper green"><i data-lucide="check-circle"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-green">Já são doadores</div>
+              <div class="metric-value" id="metricDoador">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper orange"><i data-lucide="clock"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-orange">Futuros doadores</div>
+              <div class="metric-value" id="metricNaoDoador">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper blue"><i data-lucide="megaphone"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-blue">Apoiadores</div>
+              <div class="metric-value" id="metricAjudar">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper purple"><i data-lucide="building"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-purple">Parceiros</div>
+              <div class="metric-value" id="metricParceiro">0</div>
+            </div>
+          </div>
+
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper whatsapp"><i data-lucide="message-circle"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Opt-in WhatsApp</div>
+              <div class="metric-value" id="metricOptin">0</div>
+            </div>
+          </div>
+          <div class="card metric-card urgent-metric">
+            <div class="metric-icon-wrapper"><i data-lucide="bell-ring"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Precisam de Cuidado</div>
+              <div class="metric-value" id="metricFollowUp">0</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Gráficos -->
+        <section class="charts-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Crescimento de Cadastros</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Distribuição de Perfis</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="typeChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Momentos da Jornada</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="statusChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Impacto das Campanhas</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="campaignChart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tabela de Leads -->
+        <section class="card table-card">
+          <div class="card-header flex-between">
+            <h2 class="card-title text-xl">Cadastros Recentes</h2>
+            <button class="btn btn-pill-outline btn-sm">Ver todos</button>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Pessoa</th>
+                    <th>Contato</th>
+                    <th>Perfil</th>
+                    <th>Jornada</th>
+                    <th>Origem</th>
+                    <th>Data</th>
+                    <th class="text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="leadsTableBody">
+                  <!-- Preenchido via JS -->
+                </tbody>
+              </table>
+            </div>
+            <div id="paginationContainer" class="pagination"></div>
+          </div>
+        </section>
+
+        <div class="bottom-grids">
+          <!-- Campanhas -->
+          <section class="campaigns-section">
+            <h2 class="section-title">Desempenho de Campanhas</h2>
+            <div class="campaigns-grid" id="campaignsContainer">
+              <!-- Preenchido via JS -->
+            </div>
+          </section>
+
+          <!-- Parceiros -->
+          <section class="card table-card">
+            <div class="card-header">
+              <h2 class="card-title">Rede de Apoio (Parceiros)</h2>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Nome do Parceiro</th>
+                      <th>Tipo</th>
+                      <th>Localização</th>
+                      <th class="text-right">Vidas alcançadas</th>
+                      <th class="text-right">Perfil Comum</th>
+                      <th class="text-right">WhatsApp</th>
+                    </tr>
+                  </thead>
+                  <tbody id="partnersTableBody">
+                    <!-- Preenchido via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal Detalhes Lead -->
+  <div class="modal-overlay" id="leadModal">
+    <div class="modal-content emotional-modal">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <div class="avatar-large"><i data-lucide="user"></i></div>
+          <div>
+            <h2 class="card-title text-2xl" id="modalLeadName">Nome do Lead</h2>
+            <span class="badge mt-2" id="modalLeadStatus">Status</span>
+          </div>
+        </div>
+        <button class="btn btn-icon-only" id="btnCloseModal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="info-card">
+          <h3 class="info-title"><i data-lucide="contact"></i> Informações de Contato</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Email</span>
+              <span class="detail-value" id="modalLeadEmail">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">WhatsApp</span>
+              <span class="detail-value" id="modalLeadWhatsapp">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Localização</span>
+              <span class="detail-value" id="modalLeadLocation">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Tipo de Cadastro</span>
+              <span class="detail-value" id="modalLeadType">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3 class="info-title"><i data-lucide="map-pin"></i> Origem e Permissões</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Origem</span>
+              <span class="detail-value" id="modalLeadOrigin">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Campanha (UTM)</span>
+              <span class="detail-value" id="modalLeadCampaign">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Parceiro</span>
+              <span class="detail-value" id="modalLeadPartner">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Política de Privacidade</span>
+              <span class="detail-value" id="modalPrivacy">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Opt-in WhatsApp</span>
+              <span class="detail-value" id="modalOptinWpp">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Opt-in E-mail</span>
+              <span class="detail-value" id="modalOptinEmail">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3 class="info-title"><i data-lucide="database"></i> Dados do Sistema</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Data de Criação</span>
+              <span class="detail-value" id="modalCreatedAt">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Última Atualização</span>
+              <span class="detail-value" id="modalUpdatedAt">-</span>
+            </div>
+          </div>
+          <div class="detail-item mt-4">
+            <span class="detail-label">Observações Internas</span>
+            <span class="detail-value text-muted" id="modalObs">-</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Inicializa os ícones
+    lucide.createIcons();
+
+    // Menu Mobile
+    const btnMobileMenu = document.getElementById('btnMobileMenu');
+    const sidebar = document.querySelector('.sidebar');
+    if(btnMobileMenu) {
+      btnMobileMenu.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+      });
+    }
+  </script>
+  <script type="module" src="./assets/js/app.js"></script>
+</body>
+
+=======
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fla Medula - Dashboard</title>
+  <!-- Security Headers -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://mabujqfyxylfkrtxsbti.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="./assets/css/styles.css">
+</head>
+
+<body>
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <i data-lucide="heart"></i>
+        </div>
+        <div class="brand-title">Fla <span>Medula</span></div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active">
+          <i data-lucide="layout-dashboard"></i>
+          <span>Visão Geral</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i data-lucide="users"></i>
+          <span>Cadastros</span>
+        </a>
+        <a href="#" class="nav-item">
+          <i data-lucide="activity"></i>
+          <span>Jornadas</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="sidebar-illustration">
+          <div class="blob-pink"></div>
+          <i data-lucide="droplet" class="illustration-icon"></i>
+          <p>Cada gota importa.</p>
+        </div>
+      </div>
+    </aside>
+
+    <div class="main-wrapper">
+
+      <!-- Internal Header -->
+      <header class="internal-header">
+        <div class="header-greeting">
+          <div class="mobile-menu-wrapper">
+            <button class="btn btn-icon-only mobile-menu-toggle" id="btnMobileMenu">
+              <i data-lucide="menu"></i>
+            </button>
+            <h1>Olá, <span class="text-primary">Equipe</span> <i data-lucide="sparkles" class="text-primary inline-icon"></i></h1>
+          </div>
+          <p>Acompanhe o impacto e o cuidado com nossos doadores hoje.</p>
+        </div>
+        <div class="header-actions">
+          <span class="last-update" id="lastUpdateDate"><i data-lucide="clock" class="inline-icon"></i> -</span>
+          <button class="btn btn-icon-only" id="btnToggleTheme" title="Alternar Tema">
+            <i data-lucide="moon"></i>
+          </button>
+          <button class="btn btn-pill-outline" id="btnExportCsv">
+            <i data-lucide="download"></i>
+            Exportar CSV
+          </button>
+          <div class="profile-area">
+            <div class="avatar">EM</div>
+            <button class="btn btn-icon-only text-danger" id="btnLogout" title="Sair do Sistema">
+              <i data-lucide="log-out"></i>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-content">
+
+        <!-- Filtros -->
+        <section class="filters-section">
+          <div class="filter-group">
+            <label for="filterSearch">Quem você procura?</label>
+            <div class="input-with-icon">
+              <i data-lucide="search"></i>
+              <input type="text" id="filterSearch" class="form-control" placeholder="Nome, email ou WhatsApp...">
+            </div>
+          </div>
+          <div class="filter-group">
+            <label for="filterType">Tipo de Vínculo</label>
+            <select id="filterType" class="form-control">
+              <option value="">Todos os corações</option>
+              <option value="ja_sou_doador">Já sou doador</option>
+              <option value="nao_sou_doador_ainda">Não sou doador ainda</option>
+              <option value="quero_ajudar_divulgar">Quero ajudar/divulgar</option>
+              <option value="instituicao_ou_parceiro">Instituição ou parceiro</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filterStatus">Momento da Jornada</label>
+            <select id="filterStatus" class="form-control">
+              <option value="">Qualquer momento</option>
+              <option value="novo">Novo</option>
+              <option value="boas_vindas_enviada">Boas-vindas enviada</option>
+              <option value="em_educacao">Em educação</option>
+              <option value="interessado">Interessado</option>
+              <option value="orientado">Orientado</option>
+              <option value="cadastrado_no_redome">Cadastrado no REDOME</option>
+              <option value="quer_ajudar">Quer ajudar</option>
+              <option value="sem_resposta">Sem resposta</option>
+              <option value="descadastrado">Descadastrado</option>
+              <option value="invalido">Inválido</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="filterOptin">Contato via WhatsApp</label>
+            <select id="filterOptin" class="form-control">
+              <option value="">Todos</option>
+              <option value="sim">Autorizado</option>
+              <option value="nao">Não autorizado</option>
+            </select>
+          </div>
+          <div class="filters-actions">
+            <button class="btn btn-pill-ghost w-full" id="btnClearFilters">
+              <i data-lucide="x"></i>
+              Limpar Filtros
+            </button>
+          </div>
+        </section>
+
+        <!-- Cards de Métricas -->
+        <section class="metrics-grid">
+          <div class="card metric-card featured-metric">
+            <div class="metric-icon-wrapper"><i data-lucide="users"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Total de Vidas Tocadas</div>
+              <div class="metric-value" id="metricTotalLeads">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper soft-red"><i data-lucide="sun"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Novos Hoje</div>
+              <div class="metric-value" id="metricLeadsToday">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper soft-pink"><i data-lucide="calendar"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Últimos 7 dias</div>
+              <div class="metric-value" id="metricLeads7Days">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper soft-pink"><i data-lucide="calendar-days"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Últimos 30 dias</div>
+              <div class="metric-value" id="metricLeads30Days">0</div>
+            </div>
+          </div>
+
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper green"><i data-lucide="check-circle"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-green">Já são doadores</div>
+              <div class="metric-value" id="metricDoador">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper orange"><i data-lucide="clock"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-orange">Futuros doadores</div>
+              <div class="metric-value" id="metricNaoDoador">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper blue"><i data-lucide="megaphone"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-blue">Apoiadores</div>
+              <div class="metric-value" id="metricAjudar">0</div>
+            </div>
+          </div>
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper purple"><i data-lucide="building"></i></div>
+            <div class="metric-content">
+              <div class="metric-title text-purple">Parceiros</div>
+              <div class="metric-value" id="metricParceiro">0</div>
+            </div>
+          </div>
+
+          <div class="card metric-card">
+            <div class="metric-icon-wrapper whatsapp"><i data-lucide="message-circle"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Opt-in WhatsApp</div>
+              <div class="metric-value" id="metricOptin">0</div>
+            </div>
+          </div>
+          <div class="card metric-card urgent-metric">
+            <div class="metric-icon-wrapper"><i data-lucide="bell-ring"></i></div>
+            <div class="metric-content">
+              <div class="metric-title">Precisam de Cuidado</div>
+              <div class="metric-value" id="metricFollowUp">0</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Gráficos -->
+        <section class="charts-grid">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Crescimento de Cadastros</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Distribuição de Perfis</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="typeChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Momentos da Jornada</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="statusChart"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Impacto das Campanhas</h3>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="campaignChart"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Tabela de Leads -->
+        <section class="card table-card">
+          <div class="card-header flex-between">
+            <h2 class="card-title text-xl">Cadastros Recentes</h2>
+            <button class="btn btn-pill-outline btn-sm">Ver todos</button>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Pessoa</th>
+                    <th>Contato</th>
+                    <th>Perfil</th>
+                    <th>Jornada</th>
+                    <th>Origem</th>
+                    <th>Data</th>
+                    <th class="text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="leadsTableBody">
+                  <!-- Preenchido via JS -->
+                </tbody>
+              </table>
+            </div>
+            <div id="paginationContainer" class="pagination"></div>
+          </div>
+        </section>
+
+        <div class="bottom-grids">
+          <!-- Campanhas -->
+          <section class="campaigns-section">
+            <h2 class="section-title">Desempenho de Campanhas</h2>
+            <div class="campaigns-grid" id="campaignsContainer">
+              <!-- Preenchido via JS -->
+            </div>
+          </section>
+
+          <!-- Parceiros -->
+          <section class="card table-card">
+            <div class="card-header">
+              <h2 class="card-title">Rede de Apoio (Parceiros)</h2>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Nome do Parceiro</th>
+                      <th>Tipo</th>
+                      <th>Localização</th>
+                      <th class="text-right">Vidas alcançadas</th>
+                      <th class="text-right">Perfil Comum</th>
+                      <th class="text-right">WhatsApp</th>
+                    </tr>
+                  </thead>
+                  <tbody id="partnersTableBody">
+                    <!-- Preenchido via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal Detalhes Lead -->
+  <div class="modal-overlay" id="leadModal">
+    <div class="modal-content emotional-modal">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <div class="avatar-large"><i data-lucide="user"></i></div>
+          <div>
+            <h2 class="card-title text-2xl" id="modalLeadName">Nome do Lead</h2>
+            <span class="badge mt-2" id="modalLeadStatus">Status</span>
+          </div>
+        </div>
+        <button class="btn btn-icon-only" id="btnCloseModal"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="info-card">
+          <h3 class="info-title"><i data-lucide="contact"></i> Informações de Contato</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Email</span>
+              <span class="detail-value" id="modalLeadEmail">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">WhatsApp</span>
+              <span class="detail-value" id="modalLeadWhatsapp">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Localização</span>
+              <span class="detail-value" id="modalLeadLocation">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Tipo de Cadastro</span>
+              <span class="detail-value" id="modalLeadType">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3 class="info-title"><i data-lucide="map-pin"></i> Origem e Permissões</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Origem</span>
+              <span class="detail-value" id="modalLeadOrigin">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Campanha (UTM)</span>
+              <span class="detail-value" id="modalLeadCampaign">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Parceiro</span>
+              <span class="detail-value" id="modalLeadPartner">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Política de Privacidade</span>
+              <span class="detail-value" id="modalPrivacy">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Opt-in WhatsApp</span>
+              <span class="detail-value" id="modalOptinWpp">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Opt-in E-mail</span>
+              <span class="detail-value" id="modalOptinEmail">-</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3 class="info-title"><i data-lucide="database"></i> Dados do Sistema</h3>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Data de Criação</span>
+              <span class="detail-value" id="modalCreatedAt">-</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Última Atualização</span>
+              <span class="detail-value" id="modalUpdatedAt">-</span>
+            </div>
+          </div>
+          <div class="detail-item mt-4">
+            <span class="detail-label">Observações Internas</span>
+            <span class="detail-value text-muted" id="modalObs">-</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Inicializa os ícones
+    lucide.createIcons();
+
+    // Menu Mobile
+    const btnMobileMenu = document.getElementById('btnMobileMenu');
+    const sidebar = document.querySelector('.sidebar');
+    if(btnMobileMenu) {
+      btnMobileMenu.addEventListener('click', () => {
+        sidebar.classList.toggle('open');
+      });
+    }
+  </script>
+  <script type="module" src="./assets/js/app.js"></script>
+</body>
+
+>>>>>>> 7fee6b2 (fix: corrigir nome Ela para Fla Medula na sidebar)
+</html>

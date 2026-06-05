@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Fla Medula</title>
+  <!-- Security Headers -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://mabujqfyxylfkrtxsbti.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="X-Frame-Options" content="DENY">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/styles.css">
+  <style>
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, var(--color-bg) 0%, rgba(220, 38, 38, 0.05) 100%);
+    }
+    
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      padding: 2.5rem;
+      border-radius: var(--radius);
+      background-color: var(--color-surface);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--glass-border);
+      text-align: center;
+    }
+    
+    .login-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--color-primary), #991b1b);
+      color: white;
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 8px 24px rgba(220, 38, 38, 0.3);
+    }
+    
+    .login-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    
+    .login-subtitle {
+      color: var(--color-text-muted);
+      font-size: 0.875rem;
+      margin-bottom: 2rem;
+    }
+    
+    .form-group {
+      text-align: left;
+      margin-bottom: 1.25rem;
+    }
+    
+    .btn-login {
+      width: 100%;
+      padding: 0.75rem;
+      font-size: 1rem;
+      margin-top: 1rem;
+    }
+    
+    .loading-spinner {
+      display: none;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+      margin-left: 0.5rem;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-logo">FM</div>
+      <h1 class="login-title">Acesso Restrito</h1>
+      <p class="login-subtitle">Dashboard Administrativa Fla Medula</p>
+      
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email" class="font-medium text-small">Email</label>
+          <input type="email" id="email" class="form-control mt-1" placeholder="operador@flamedula.com.br" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="password" class="font-medium text-small">Senha</label>
+          <input type="password" id="password" class="form-control mt-1" placeholder="••••••••" required>
+        </div>
+        
+        <button type="submit" class="btn btn-primary btn-login" id="btnSubmit">
+          Entrar no Sistema
+          <div class="loading-spinner" id="loginSpinner"></div>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script type="module">
+    import { handleLogin } from './assets/js/auth.js';
+    import { showToast } from './assets/js/toast.js';
+    
+    // Configuração inicial de tema baseada no localStorage
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    if (savedTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+
+    const form = document.getElementById('loginForm');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const spinner = document.getElementById('loginSpinner');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      
+      // Estado de loading
+      btnSubmit.disabled = true;
+      spinner.style.display = 'inline-block';
+      
+      try {
+        await handleLogin(email, password);
+      } catch (error) {
+        // Erro já é tratado no auth.js com showToast
+      } finally {
+        btnSubmit.disabled = false;
+        spinner.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>
