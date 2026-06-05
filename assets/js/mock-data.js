@@ -92,6 +92,7 @@ export const donor_leads = donorNames.map((nome, index) => {
     ja_doador_sangue: index % 3 !== 0,
     quer_doar_sangue: index % 4 !== 1,
     quer_doar_medula: index % 5 !== 2,
+    contato_whatsapp_realizado: index % 3 === 0 || index % 4 === 0,
     status,
     created_at: daysAgo((index * 2) % 84, 9 + (index % 8))
   };
@@ -110,6 +111,7 @@ export const patients = patientNames.map((nome_paciente, index) => {
     hospital: hospitals[index % hospitals.length],
     cidade: city.cidade,
     estado: city.estado,
+    contato_whatsapp_realizado: index % 2 === 0 || index % 5 === 0,
     nome_medico: doctor,
     crm_medico: `${city.estado}-${String(42000 + index * 379)}`,
     telefone_responsavel: phoneFor(city, index + 71),

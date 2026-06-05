@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="auth-checking">
 
 <head>
   <meta charset="UTF-8">
@@ -9,6 +9,37 @@
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="DENY">
   <meta name="referrer" content="strict-origin-when-cross-origin">
+  <style>
+    html.auth-checking body {
+      visibility: hidden;
+    }
+
+    html.auth-ready body {
+      visibility: visible;
+    }
+
+    html.redirect-login body {
+      display: none;
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var rawSession = localStorage.getItem("flamedula_mvp_session");
+        var session = rawSession ? JSON.parse(rawSession) : null;
+        if (session && session.authenticated) {
+          document.documentElement.classList.remove("auth-checking");
+          document.documentElement.classList.add("auth-ready");
+          return;
+        }
+      } catch (error) {
+      }
+
+      document.documentElement.classList.remove("auth-checking");
+      document.documentElement.classList.add("redirect-login");
+      window.location.replace("./login.html");
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -155,6 +186,14 @@
                 <canvas id="chartDonationPeriod"></canvas>
               </div>
             </article>
+            <article class="card chart-card">
+              <div class="card-header">
+                <h3>Estados com mais doadores</h3>
+              </div>
+              <div class="chart-box">
+                <canvas id="chartOverviewStates"></canvas>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -166,7 +205,7 @@
             </div>
           </div>
 
-          <div class="filters-grid">
+          <div class="filters-grid donor-filters-grid">
             <label>
               <span>Estado</span>
               <select id="donorStateFilter"></select>
@@ -186,6 +225,14 @@
             <label>
               <span>Status</span>
               <select id="donorStatusFilter"></select>
+            </label>
+            <label>
+              <span>Contato WhatsApp</span>
+              <select id="donorWhatsappFilter">
+                <option value="">Todos</option>
+                <option value="realizado">Realizado</option>
+                <option value="pendente">Pendente</option>
+              </select>
             </label>
             <button class="action-button ghost" type="button" id="btnClearDonorFilters">
               <i data-lucide="x"></i>
@@ -207,6 +254,7 @@
                     <th>Tipo sanguíneo</th>
                     <th>Já doa sangue</th>
                     <th>Quer medula</th>
+                    <th>Contato WhatsApp</th>
                     <th>Status</th>
                     <th>Cadastro</th>
                     <th>Ações</th>
@@ -240,6 +288,7 @@
                     <th>Cidade/Estado</th>
                     <th>Tipo sanguíneo</th>
                     <th>Necessita medula</th>
+                    <th>Contato WhatsApp</th>
                     <th>Médico</th>
                     <th>CRM</th>
                     <th>Status</th>

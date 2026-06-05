@@ -95,6 +95,7 @@ export function renderOverviewCharts(donors, patients, donations) {
   const registrations = seriesFromDate(donors, "created_at", null, 18);
   const donationSeries = seriesFromDate(donations, "created_at", "valor", 18);
   const patientStatuses = sortEntriesByValue(countBy(patients, "status"), 8);
+  const topStates = sortEntriesByValue(countBy(donors, "estado"), 8);
 
   createChart("chartRegistrations", {
     type: "line",
@@ -195,6 +196,22 @@ export function renderOverviewCharts(donors, patients, donations) {
           }
         }
       }
+    })
+  });
+
+  createChart("chartOverviewStates", {
+    type: "bar",
+    data: {
+      labels: topStates.map(([state]) => state),
+      datasets: [{
+        label: "Doadores por estado",
+        data: topStates.map(([, value]) => value),
+        backgroundColor: colors.red,
+        borderRadius: 8
+      }]
+    },
+    options: baseOptions({
+      plugins: { ...baseOptions().plugins, legend: { display: false } }
     })
   });
 }

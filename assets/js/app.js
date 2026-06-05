@@ -31,7 +31,8 @@ const state = {
     estado: "",
     tipo_sanguineo: "",
     quer_doar_medula: "",
-    status: ""
+    status: "",
+    contato_whatsapp: ""
   },
   reportFilters: {
     periodo: "all",
@@ -53,6 +54,8 @@ async function initApp() {
   state.session = requireAuth();
   if (!state.session) return;
 
+  document.documentElement.classList.remove("auth-checking");
+  document.documentElement.classList.add("auth-ready");
   applySavedTheme();
   bindEvents();
 
@@ -99,13 +102,14 @@ function bindEvents() {
   bindFilter("donorBloodFilter", "donorFilters", "tipo_sanguineo");
   bindFilter("donorStatusFilter", "donorFilters", "status");
   bindFilter("donorMarrowFilter", "donorFilters", "quer_doar_medula");
+  bindFilter("donorWhatsappFilter", "donorFilters", "contato_whatsapp");
   bindFilter("reportPeriodFilter", "reportFilters", "periodo");
   bindFilter("reportStateFilter", "reportFilters", "estado");
   bindFilter("reportBloodFilter", "reportFilters", "tipo_sanguineo");
 
   document.getElementById("btnClearDonorFilters")?.addEventListener("click", () => {
-    state.donorFilters = { estado: "", tipo_sanguineo: "", quer_doar_medula: "", status: "" };
-    ["donorStateFilter", "donorBloodFilter", "donorStatusFilter", "donorMarrowFilter"].forEach((id) => {
+    state.donorFilters = { estado: "", tipo_sanguineo: "", quer_doar_medula: "", status: "", contato_whatsapp: "" };
+    ["donorStateFilter", "donorBloodFilter", "donorStatusFilter", "donorMarrowFilter", "donorWhatsappFilter"].forEach((id) => {
       document.getElementById(id).value = "";
     });
     renderAll();
@@ -164,12 +168,16 @@ function renderOverview() {
   const donations = getGlobalDonations();
   const paidDonations = donations.filter((donation) => donation.status_pagamento === "pago");
   const pendingDonations = donations.filter((donation) => donation.status_pagamento === "pendente");
+  const whatsappDone = donors.filter((donor) => donor.contato_whatsapp_realizado).length;
+  const whatsappPending = donors.length - whatsappDone;
 
   renderMetrics("overviewMetrics", [
     { label: "Total de doadores", value: donors.length, detail: "Leads mockados", icon: "users", tone: "red", featured: true },
     { label: "Já doam sangue", value: donors.filter((donor) => donor.ja_doador_sangue).length, detail: "Histórico positivo", icon: "droplet", tone: "green" },
     { label: "Interessados em medula", value: donors.filter((donor) => donor.quer_doar_medula).length, detail: "Potencial REDOME", icon: "heart", tone: "red" },
     { label: "Pacientes cadastrados", value: patients.length, detail: "Casos em acompanhamento", icon: "activity", tone: "blue" },
+    { label: "WhatsApp realizado", value: whatsappDone, detail: "Contatos já orientados", icon: "message-circle", tone: "green" },
+    { label: "WhatsApp pendente", value: whatsappPending, detail: "Contatos aguardando retorno", icon: "clock", tone: "yellow" },
     { label: "Valor total arrecadado", value: sumBy(paidDonations, "valor"), detail: "Pagamentos confirmados", icon: "dollar-sign", tone: "green", format: "currency" },
     { label: "Doações pendentes", value: pendingDonations.length, detail: "Aguardando confirmação", icon: "clock", tone: "yellow" }
   ]);
@@ -198,6 +206,7 @@ function renderDonors() {
         <td><strong>${escapeHtml(donor.tipo_sanguineo)}</strong></td>
         <td>${yesNo(donor.ja_doador_sangue)}</td>
         <td>${yesNo(donor.quer_doar_medula)}</td>
+        <td><span class="badge ${donor.contato_whatsapp_realizado ? "positive" : "warning"}">${donor.contato_whatsapp_realizado ? "Realizado" : "Pendente"}</span></td>
         <td><span class="badge ${statusClass(donor.status)}">${getDonorStatusLabel(donor.status)}</span></td>
         <td>${formatDate(donor.created_at)}</td>
         <td>
@@ -208,7 +217,7 @@ function renderDonors() {
         </td>
       </tr>
     `)
-    .join("") || emptyRow(12, "Nenhum doador encontrado com os filtros atuais.");
+    .join("") || emptyRow(13, "Nenhum doador encontrado com os filtros atuais.");
 }
 
 function renderPatients() {
@@ -234,13 +243,14 @@ function renderPatients() {
         <td>${escapeHtml(patient.cidade)}/${escapeHtml(patient.estado)}</td>
         <td><strong>${escapeHtml(patient.tipo_sanguineo)}</strong></td>
         <td>${yesNo(patient.necessita_medula)}</td>
+        <td><span class="badge ${patient.contato_whatsapp_realizado ? "positive" : "warning"}">${patient.contato_whatsapp_realizado ? "Realizado" : "Pendente"}</span></td>
         <td>${escapeHtml(patient.nome_medico)}</td>
         <td>${escapeHtml(patient.crm_medico)}</td>
         <td><span class="badge ${statusClass(patient.status)}">${getPatientStatusLabel(patient.status)}</span></td>
         <td><button class="icon-button" type="button" title="Visualizar" data-detail-type="patient" data-id="${patient.id}"><i data-lucide="eye"></i></button></td>
       </tr>
     `)
-    .join("") || emptyRow(11, "Nenhum paciente encontrado.");
+    .join("") || emptyRow(12, "Nenhum paciente encontrado.");
 }
 
 function renderDonations() {
@@ -346,12 +356,33 @@ function animateMetrics(container) {
   });
 }
 
+function normalizeSearch(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesRecordQuery(record, fields, query) {
+  if (includesQuery(record, fields, query)) return true;
+
+  const normalizedQuery = normalizeSearch(query);
+  if (!normalizedQuery) return true;
+
+  const whatsappTerms = record.contato_whatsapp_realizado
+    ? "whatsapp contato realizado orientacao"
+    : "whatsapp contato pendente orientacao";
+
+  return whatsappTerms.includes(normalizedQuery);
+}
+
 function getGlobalDonors() {
-  return state.donors.filter((donor) => includesQuery(donor, donorSearchFields, state.globalQuery));
+  return state.donors.filter((donor) => matchesRecordQuery(donor, donorSearchFields, state.globalQuery));
 }
 
 function getGlobalPatients() {
-  return state.patients.filter((patient) => includesQuery(patient, patientSearchFields, state.globalQuery));
+  return state.patients.filter((patient) => matchesRecordQuery(patient, patientSearchFields, state.globalQuery));
 }
 
 function getGlobalDonations() {
@@ -361,10 +392,12 @@ function getGlobalDonations() {
 function getFilteredDonors() {
   return getGlobalDonors().filter((donor) => {
     const marrow = state.donorFilters.quer_doar_medula;
+    const whatsapp = state.donorFilters.contato_whatsapp;
     return (!state.donorFilters.estado || donor.estado === state.donorFilters.estado) &&
       (!state.donorFilters.tipo_sanguineo || donor.tipo_sanguineo === state.donorFilters.tipo_sanguineo) &&
       (!state.donorFilters.status || donor.status === state.donorFilters.status) &&
-      (!marrow || donor.quer_doar_medula === (marrow === "sim"));
+      (!marrow || donor.quer_doar_medula === (marrow === "sim")) &&
+      (!whatsapp || donor.contato_whatsapp_realizado === (whatsapp === "realizado"));
   });
 }
 
@@ -464,6 +497,7 @@ function openDetails(type, id) {
         ["Já doa sangue", yesNo(record.ja_doador_sangue)],
         ["Quer doar sangue", yesNo(record.quer_doar_sangue)],
         ["Quer doar medula", yesNo(record.quer_doar_medula)],
+        ["Contato WhatsApp", record.contato_whatsapp_realizado ? "Realizado" : "Pendente"],
         ["Status", getDonorStatusLabel(record.status)],
         ["Cadastro", formatDateTime(record.created_at)]
       ]
@@ -476,6 +510,7 @@ function openDetails(type, id) {
         ["Diagnóstico", record.diagnostico],
         ["Tipo sanguíneo", record.tipo_sanguineo],
         ["Necessita medula", yesNo(record.necessita_medula)],
+        ["Contato WhatsApp", record.contato_whatsapp_realizado ? "Realizado" : "Pendente"],
         ["Hospital", record.hospital],
         ["Cidade/Estado", `${record.cidade}/${record.estado}`],
         ["Médico", record.nome_medico],
@@ -548,6 +583,7 @@ function exportDonorsCsv(rows, filename) {
     { label: "ja_doador_sangue", value: (row) => yesNo(row.ja_doador_sangue) },
     { label: "quer_doar_sangue", value: (row) => yesNo(row.quer_doar_sangue) },
     { label: "quer_doar_medula", value: (row) => yesNo(row.quer_doar_medula) },
+    { label: "contato_whatsapp_realizado", value: (row) => row.contato_whatsapp_realizado ? "Realizado" : "Pendente" },
     { label: "status", value: (row) => getDonorStatusLabel(row.status) },
     { label: "created_at", value: "created_at" }
   ]), filename);
@@ -562,6 +598,7 @@ function exportPatientsCsv(rows, filename) {
     { label: "diagnostico", value: "diagnostico" },
     { label: "tipo_sanguineo", value: "tipo_sanguineo" },
     { label: "necessita_medula", value: (row) => yesNo(row.necessita_medula) },
+    { label: "contato_whatsapp_realizado", value: (row) => row.contato_whatsapp_realizado ? "Realizado" : "Pendente" },
     { label: "hospital", value: "hospital" },
     { label: "cidade", value: "cidade" },
     { label: "estado", value: "estado" },
