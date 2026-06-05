@@ -40,11 +40,6 @@ function initLoginForm() {
   const form = document.getElementById("loginForm");
   if (!form) return;
 
-  if (getSession()?.authenticated) {
-    window.location.replace("./index.html");
-    return;
-  }
-
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const login = document.getElementById("loginUser")?.value.trim();
