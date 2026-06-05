@@ -10,16 +10,13 @@
   <meta http-equiv="X-Frame-Options" content="DENY">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <style>
-    html.auth-checking body {
-      visibility: hidden;
-    }
-
-    html.auth-ready body {
-      visibility: visible;
-    }
-
-    html.redirect-login body {
+    html.auth-checking .shell,
+    html.redirect-login .shell {
       display: none;
+    }
+
+    html.auth-ready .shell {
+      display: flex;
     }
   </style>
   <script>
