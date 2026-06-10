@@ -1,4 +1,11 @@
-import { getDashboardData } from "./api.js";
+import {
+  deleteDonorRecord,
+  deletePatientRecord,
+  getDashboardData,
+  updateDonorContactStatus,
+  updateDonorRecord,
+  updatePatientRecord
+} from "./api.js";
 import { handleLogout, requireAuth } from "./auth.js";
 import { renderDonationChart, renderOverviewCharts, renderRegionCharts } from "./charts.js";
 import { showToast } from "./toast.js";
@@ -15,6 +22,7 @@ import {
   getPaymentStatusLabel,
   includesQuery,
   isWithinDays,
+  normalizeText,
   sortEntriesByValue,
   statusClass,
   sumBy,
@@ -22,6 +30,21 @@ import {
   uniqueSorted,
   yesNo
 } from "./utils.js";
+
+const bloodCompatibility = {
+  "O-": ["O-"],
+  "O+": ["O-", "O+"],
+  "A-": ["O-", "A-"],
+  "A+": ["O-", "O+", "A-", "A+"],
+  "B-": ["O-", "B-"],
+  "B+": ["O-", "O+", "B-", "B+"],
+  "AB-": ["O-", "A-", "B-", "AB-"],
+  "AB+": ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"]
+};
+
+const bloodTypes = ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"];
+const donorStatuses = ["novo", "em_contato", "apto", "aguardando_documentos", "encaminhado_redome", "inativo"];
+const patientStatuses = ["em_analise", "urgente", "acompanhamento", "compatibilidade_encontrada"];
 
 const state = {
   activeTab: "overview",
@@ -42,7 +65,10 @@ const state = {
   donors: [],
   patients: [],
   donations: [],
-  dataErrors: []
+  dataErrors: [],
+  matchingContext: null,
+  formContext: null,
+  isUpdatingMatch: false
 };
 
 const donorSearchFields = [
@@ -156,6 +182,7 @@ function bindEvents() {
       status: "",
       contato_whatsapp: ""
     };
+
     [
       "donorStateFilter",
       "donorBloodFilter",
@@ -166,10 +193,12 @@ function bindEvents() {
       const field = document.getElementById(id);
       if (field) field.value = "";
     });
+
     renderAll();
   });
 
-  document.addEventListener("click", handleTableAction);
+  document.addEventListener("click", handleClickActions);
+  document.addEventListener("submit", handleEntityFormSubmit);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeModal();
   });
@@ -217,6 +246,19 @@ function renderAll() {
   renderRegions();
   renderReports();
   renderActiveCharts();
+
+  if (state.formContext) {
+    syncFormContext();
+    if (state.formContext) {
+      renderEntityFormModal();
+    }
+  } else if (state.matchingContext) {
+    syncMatchingContext();
+    if (state.matchingContext) {
+      renderMatchingModal();
+    }
+  }
+
   createIcons();
 }
 
@@ -287,7 +329,9 @@ function renderDonors() {
         <td>${formatDate(donor.created_at)}</td>
         <td>
           <div class="row-actions">
-            <button class="icon-button" type="button" title="Visualizar" data-detail-type="donor" data-id="${donor.id}"><i data-lucide="eye"></i></button>
+            <button class="icon-button" type="button" title="Visualizar" data-detail-type="donor" data-id="${escapeHtml(donor.id)}"><i data-lucide="eye"></i></button>
+            <button class="icon-button" type="button" title="Editar" data-edit-entity="donor" data-id="${escapeHtml(donor.id)}"><i data-lucide="pencil"></i></button>
+            <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="donor" data-id="${escapeHtml(donor.id)}" data-name="${escapeHtml(donor.nome || "doador")}"><i data-lucide="trash-2"></i></button>
           </div>
         </td>
       </tr>
@@ -324,7 +368,14 @@ function renderPatients() {
         <td>${escapeHtml(patient.nome_medico || "-")}</td>
         <td>${escapeHtml(patient.crm_medico || "-")}</td>
         <td><span class="badge ${statusClass(patient.status)}">${getPatientStatusLabel(patient.status)}</span></td>
-        <td><button class="icon-button" type="button" title="Visualizar" data-detail-type="patient" data-id="${patient.id}"><i data-lucide="eye"></i></button></td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-button" type="button" title="Visualizar" data-detail-type="patient" data-id="${escapeHtml(patient.id)}"><i data-lucide="eye"></i></button>
+            <button class="icon-button" type="button" title="Editar" data-edit-entity="patient" data-id="${escapeHtml(patient.id)}"><i data-lucide="pencil"></i></button>
+            <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="patient" data-id="${escapeHtml(patient.id)}" data-name="${escapeHtml(patient.nome_paciente || "paciente")}"><i data-lucide="trash-2"></i></button>
+            <button class="table-action-button table-action-button-primary" type="button" data-match-patient-id="${escapeHtml(patient.id)}">Encontrar doadores</button>
+          </div>
+        </td>
       </tr>
     `)
     .join("") || emptyRow(12, "Nenhum registro encontrado");
@@ -356,7 +407,7 @@ function renderDonations() {
         <td>${escapeHtml(donation.metodo_pagamento || "-")}</td>
         <td><span class="badge ${statusClass(donation.status_pagamento)}">${getPaymentStatusLabel(donation.status_pagamento)}</span></td>
         <td>${formatDate(donation.created_at)}</td>
-        <td><button class="icon-button" type="button" title="Visualizar" data-detail-type="donation" data-id="${donation.id}"><i data-lucide="eye"></i></button></td>
+        <td><button class="icon-button" type="button" title="Visualizar" data-detail-type="donation" data-id="${escapeHtml(donation.id)}"><i data-lucide="eye"></i></button></td>
       </tr>
     `)
     .join("") || emptyRow(8, "Nenhum registro encontrado");
@@ -435,18 +486,10 @@ function animateMetrics(container) {
   });
 }
 
-function normalizeSearch(value) {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
 function matchesRecordQuery(record, fields, query) {
   if (includesQuery(record, fields, query)) return true;
 
-  const normalizedQuery = normalizeSearch(query);
+  const normalizedQuery = normalizeText(query).trim();
   if (!normalizedQuery) return true;
 
   const whatsappTerms = record.contato_whatsapp_realizado
@@ -546,21 +589,48 @@ function renderActiveCharts() {
   }
 }
 
-function handleTableAction(event) {
+function handleClickActions(event) {
+  const deleteButton = event.target.closest("[data-delete-entity]");
+  if (deleteButton) {
+    handleDeleteEntity(deleteButton.dataset.deleteEntity, deleteButton.dataset.id, deleteButton.dataset.name);
+    return;
+  }
+
+  const editButton = event.target.closest("[data-edit-entity]");
+  if (editButton) {
+    openEditModal(editButton.dataset.editEntity, editButton.dataset.id);
+    return;
+  }
+
   const detailButton = event.target.closest("[data-detail-type]");
   if (detailButton) {
     openDetails(detailButton.dataset.detailType, detailButton.dataset.id);
+    return;
+  }
+
+  const matchButton = event.target.closest("[data-match-patient-id]");
+  if (matchButton) {
+    openMatchingModal(matchButton.dataset.matchPatientId);
+    return;
+  }
+
+  const matchingAction = event.target.closest("[data-matching-action]");
+  if (matchingAction) {
+    handleMatchingAction(matchingAction.dataset.matchingAction, matchingAction);
   }
 }
 
 function openDetails(type, id) {
   const record = {
-    donor: state.donors.find((item) => item.id === id),
-    patient: state.patients.find((item) => item.id === id),
-    donation: state.donations.find((item) => item.id === id)
+    donor: findRecordById(state.donors, id),
+    patient: findRecordById(state.patients, id),
+    donation: findRecordById(state.donations, id)
   }[type];
 
   if (!record) return;
+
+  state.formContext = null;
+  state.matchingContext = null;
 
   const detailMap = {
     donor: {
@@ -620,24 +690,522 @@ function openDetails(type, id) {
   };
 
   const details = detailMap[type];
-  document.getElementById("modalKicker").textContent = details.kicker;
-  document.getElementById("modalTitle").textContent = details.title;
-  document.getElementById("modalBody").innerHTML = details.fields.map(([label, value]) => `
+  openModal({
+    kicker: details.kicker,
+    title: details.title,
+    bodyMarkup: details.fields.map(([label, value]) => `
+      <div class="detail-tile">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+    `).join(""),
+    modalClass: "",
+    bodyClass: ""
+  });
+}
+
+function openEditModal(entityType, id, options = {}) {
+  state.matchingContext = null;
+  state.formContext = {
+    entityType,
+    recordId: String(id),
+    submitting: false,
+    returnToMatchingPatientId: options.returnToMatchingPatientId || null
+  };
+  renderEntityFormModal();
+}
+
+function syncFormContext() {
+  if (!state.formContext) return;
+  const record = getRecordForEntity(state.formContext.entityType, state.formContext.recordId);
+  if (!record) {
+    state.formContext = null;
+    closeModal();
+  }
+}
+
+function renderEntityFormModal() {
+  if (!state.formContext) return;
+
+  const { entityType, recordId, submitting } = state.formContext;
+  const record = getRecordForEntity(entityType, recordId);
+  if (!record) return;
+
+  const title = entityType === "donor"
+    ? `Editar doador: ${record.nome || "Registro"}`
+    : `Editar paciente: ${record.nome_paciente || "Registro"}`;
+
+  openModal({
+    kicker: entityType === "donor" ? "Editar doador" : "Editar paciente",
+    title,
+    bodyMarkup: buildEntityFormMarkup(entityType, record, submitting),
+    modalClass: "form-modal",
+    bodyClass: "form-body"
+  });
+}
+
+function buildEntityFormMarkup(entityType, record, submitting) {
+  const isDonor = entityType === "donor";
+
+  return `
+    <form id="entityForm" class="entity-form" data-entity-type="${entityType}" data-record-id="${escapeHtml(record.id)}">
+      <div class="form-grid">
+        ${isDonor ? `
+          ${renderTextField("Nome", "nome", record.nome)}
+          ${renderTextField("Email", "email", record.email, "email")}
+          ${renderTextField("Telefone", "telefone", record.telefone, "tel")}
+          ${renderTextField("Cidade", "cidade", record.cidade)}
+          ${renderTextField("Estado", "estado", record.estado)}
+          ${renderNumberField("Idade", "idade", record.idade, 0, 120, 1)}
+          ${renderNumberField("Peso", "peso", record.peso, 0, 300, "0.1")}
+          ${renderSelectField("Tipo sanguineo", "tipo_sanguineo", record.tipo_sanguineo, bloodTypes)}
+          ${renderBooleanField("Ja doador de sangue", "ja_doador_sangue", record.ja_doador_sangue)}
+          ${renderBooleanField("Quer doar sangue", "quer_doar_sangue", record.quer_doar_sangue)}
+          ${renderBooleanField("Quer doar medula", "quer_doar_medula", record.quer_doar_medula)}
+          ${renderBooleanField("Contato WhatsApp", "contato_whatsapp_realizado", record.contato_whatsapp_realizado, "Realizado", "Pendente")}
+          ${renderSelectField("Status", "status", record.status, donorStatuses, getDonorStatusLabel)}
+        ` : `
+          ${renderTextField("Nome do paciente", "nome_paciente", record.nome_paciente)}
+          ${renderNumberField("Idade", "idade", record.idade, 0, 120, 1)}
+          ${renderTextField("Diagnostico", "diagnostico", record.diagnostico)}
+          ${renderSelectField("Tipo sanguineo", "tipo_sanguineo", record.tipo_sanguineo, bloodTypes)}
+          ${renderBooleanField("Necessita medula", "necessita_medula", record.necessita_medula)}
+          ${renderTextField("Hospital", "hospital", record.hospital)}
+          ${renderTextField("Cidade", "cidade", record.cidade)}
+          ${renderTextField("Estado", "estado", record.estado)}
+          ${renderTextField("Nome do medico", "nome_medico", record.nome_medico)}
+          ${renderTextField("CRM do medico", "crm_medico", record.crm_medico)}
+          ${renderTextField("Telefone responsavel", "telefone_responsavel", record.telefone_responsavel, "tel")}
+          ${renderBooleanField("Contato WhatsApp", "contato_whatsapp_realizado", record.contato_whatsapp_realizado, "Realizado", "Pendente")}
+          ${renderSelectField("Status", "status", record.status, patientStatuses, getPatientStatusLabel)}
+        `}
+      </div>
+      ${renderTextareaField("Observacoes", "observacoes", record.observacoes)}
+      <div class="form-actions">
+        <button class="action-button ghost" type="button" id="btnCancelEntityForm">Cancelar</button>
+        <button class="action-button primary" type="submit" ${submitting ? "disabled" : ""}>
+          <i data-lucide="${submitting ? "loader-circle" : "save"}"></i>
+          <span>${submitting ? "Salvando..." : "Salvar alteracoes"}</span>
+        </button>
+      </div>
+    </form>
+  `;
+}
+
+async function handleEntityFormSubmit(event) {
+  if (event.target.id !== "entityForm" || !state.formContext) return;
+  event.preventDefault();
+
+  const { entityType, recordId, returnToMatchingPatientId } = state.formContext;
+  const record = getRecordForEntity(entityType, recordId);
+  if (!record) return;
+
+  const formData = new FormData(event.target);
+  const payload = entityType === "donor"
+    ? buildDonorPayload(formData)
+    : buildPatientPayload(formData);
+
+  state.formContext = {
+    ...state.formContext,
+    submitting: true
+  };
+  renderEntityFormModal();
+
+  try {
+    const updatedRecord = entityType === "donor"
+      ? await updateDonorRecord(recordId, payload)
+      : await updatePatientRecord(recordId, payload);
+
+    replaceRecordInState(entityType, updatedRecord);
+    populateFilters();
+    state.formContext = null;
+    renderAll();
+    showToast(entityType === "donor" ? "Doador atualizado com sucesso." : "Paciente atualizado com sucesso.");
+
+    if (entityType === "donor" && returnToMatchingPatientId) {
+      openMatchingModal(returnToMatchingPatientId);
+    } else {
+      closeModal();
+    }
+  } catch (error) {
+    console.error(`[${entityType}] handleEntityFormSubmit`, error);
+    state.formContext = {
+      ...state.formContext,
+      submitting: false
+    };
+    renderEntityFormModal();
+    showToast(error.message || "Nao foi possivel salvar as alteracoes.", "error");
+  }
+}
+
+async function handleDeleteEntity(entityType, id, name) {
+  const label = entityType === "donor" ? "doador" : "paciente";
+  const confirmed = window.confirm(`Excluir ${label} ${name || "selecionado"}?`);
+  if (!confirmed) return;
+
+  try {
+    if (entityType === "donor") {
+      await deleteDonorRecord(id);
+    } else {
+      await deletePatientRecord(id);
+    }
+
+    removeRecordFromState(entityType, id);
+    populateFilters();
+    state.formContext = null;
+    state.matchingContext = null;
+    renderAll();
+    closeModal();
+    showToast(entityType === "donor" ? "Doador excluido com sucesso." : "Paciente excluido com sucesso.");
+  } catch (error) {
+    console.error(`[${entityType}] handleDeleteEntity`, error);
+    showToast(error.message || "Nao foi possivel excluir o registro.", "error");
+  }
+}
+
+function openMatchingModal(patientId) {
+  const patient = findRecordById(state.patients, patientId);
+  if (!patient) return;
+
+  state.formContext = null;
+  state.matchingContext = {
+    patientId: String(patient.id),
+    patient,
+    matches: findCompatibleDonors(patient)
+  };
+
+  renderMatchingModal();
+}
+
+function syncMatchingContext() {
+  if (!state.matchingContext?.patientId) return;
+
+  const patient = findRecordById(state.patients, state.matchingContext.patientId);
+  if (!patient) {
+    state.matchingContext = null;
+    closeModal();
+    return;
+  }
+
+  state.matchingContext = {
+    patientId: String(patient.id),
+    patient,
+    matches: findCompatibleDonors(patient)
+  };
+}
+
+function renderMatchingModal() {
+  if (!state.matchingContext) return;
+
+  const { patient, matches } = state.matchingContext;
+  openModal({
+    kicker: "Matching",
+    title: `Doadores compativeis para ${patient.nome_paciente || "Paciente"}`,
+    bodyMarkup: buildMatchingModalMarkup(patient, matches),
+    modalClass: "matching-modal",
+    bodyClass: "matching-body"
+  });
+}
+
+function buildMatchingModalMarkup(patient, matches) {
+  const cityState = `${patient.cidade || "-"} / ${patient.estado || "-"}`;
+  const emptyState = `
+    <div class="matching-empty">
+      <strong>Nao encontramos doadores compativeis na regiao.</strong>
+      <p>Amplie a busca para todo o estado, acompanhe novos cadastros e mantenha campanhas manuais ativas.</p>
+    </div>
+  `;
+
+  return `
+    <div class="matching-shell">
+      <section class="matching-summary-card">
+        <div class="matching-summary-header">
+          <div>
+            <p class="eyebrow">Paciente</p>
+            <h3>${escapeHtml(patient.nome_paciente || "-")}</h3>
+            <p class="modal-subtitle">Lista priorizada por proximidade, compatibilidade e prontidao de contato.</p>
+          </div>
+          <button class="action-button secondary" type="button" data-matching-action="export-csv">
+            <i data-lucide="file-down"></i>
+            <span>Exportar lista CSV</span>
+          </button>
+        </div>
+        <div class="matching-summary-grid">
+          ${summaryTile("Hospital", patient.hospital || "-")}
+          ${summaryTile("Cidade/Estado", cityState)}
+          ${summaryTile("Tipo sanguineo", patient.tipo_sanguineo || "-")}
+          ${summaryTile("Precisa de medula", yesNo(patient.necessita_medula))}
+          ${summaryTile("Compativeis encontrados", formatNumber(matches.length))}
+          ${summaryTile("Status do caso", getPatientStatusLabel(patient.status))}
+        </div>
+      </section>
+      <section class="matching-results">
+        ${matches.length ? matches.map((match) => buildMatchingRow(patient, match)).join("") : emptyState}
+      </section>
+    </div>
+  `;
+}
+
+function buildMatchingRow(patient, match) {
+  const donor = match.donor;
+  const phoneAvailable = Boolean(getWhatsAppPhone(donor.telefone));
+  const tags = [
+    match.sameCity ? "Mesma cidade" : "Mesmo estado",
+    `Tipo ${escapeHtml(donor.tipo_sanguineo || "-")}`,
+    donor.ja_doador_sangue ? "Ja doa sangue" : "Quer doar sangue",
+    patient.necessita_medula ? `Medula: ${yesNo(donor.quer_doar_medula)}` : "Pronto para triagem"
+  ];
+
+  return `
+    <article class="matching-row">
+      <div class="matching-row-main">
+        <div class="matching-row-title">
+          <strong>${escapeHtml(donor.nome || "-")}</strong>
+          <span class="badge ${donor.contato_whatsapp_realizado ? "positive" : "warning"}">${donor.contato_whatsapp_realizado ? "Realizado" : "Pendente"}</span>
+        </div>
+        <div class="matching-row-meta">
+          <span>${escapeHtml(donor.telefone || "-")}</span>
+          <span>${escapeHtml(donor.cidade || "-")} / ${escapeHtml(donor.estado || "-")}</span>
+          <span>${escapeHtml(donor.tipo_sanguineo || "-")}</span>
+        </div>
+        <div class="matching-tags">
+          ${tags.map((item) => `<span class="matching-tag">${item}</span>`).join("")}
+        </div>
+      </div>
+      <div class="matching-row-actions">
+        <button class="action-button primary" type="button" ${phoneAvailable ? "" : "disabled"} data-matching-action="open-whatsapp" data-donor-id="${escapeHtml(donor.id)}">
+          <i data-lucide="message-circle"></i>
+          <span>Enviar WhatsApp</span>
+        </button>
+        <button class="action-button secondary" type="button" data-matching-action="copy-message" data-donor-id="${escapeHtml(donor.id)}">
+          <i data-lucide="copy"></i>
+          <span>Copiar mensagem</span>
+        </button>
+        <button class="action-button ghost" type="button" data-matching-action="mark-contacted" data-donor-id="${escapeHtml(donor.id)}" ${state.isUpdatingMatch ? "disabled" : ""}>
+          <i data-lucide="check-check"></i>
+          <span>Marcar contato realizado</span>
+        </button>
+        <button class="action-button ghost" type="button" data-matching-action="view-donor" data-donor-id="${escapeHtml(donor.id)}">
+          <i data-lucide="eye"></i>
+          <span>Ver detalhes do doador</span>
+        </button>
+        <button class="action-button ghost" type="button" data-matching-action="edit-donor" data-donor-id="${escapeHtml(donor.id)}">
+          <i data-lucide="pencil"></i>
+          <span>Editar doador</span>
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function summaryTile(label, value) {
+  return `
     <div class="detail-tile">
       <span>${escapeHtml(label)}</span>
       <strong>${escapeHtml(value)}</strong>
     </div>
-  `).join("");
-
-  document.getElementById("detailModal").classList.add("open");
-  document.getElementById("detailModal").setAttribute("aria-hidden", "false");
-  createIcons();
+  `;
 }
 
-function closeModal() {
-  const modal = document.getElementById("detailModal");
-  modal?.classList.remove("open");
-  modal?.setAttribute("aria-hidden", "true");
+function findCompatibleDonors(patient) {
+  const compatibleTypes = bloodCompatibility[patient.tipo_sanguineo] || [];
+  const normalizedPatientCity = normalizeText(patient.cidade).trim();
+  const normalizedPatientState = normalizeText(patient.estado).trim();
+
+  return state.donors
+    .filter((donor) => {
+      const normalizedDonorState = normalizeText(donor.estado).trim();
+      if (!normalizedPatientState || normalizedDonorState !== normalizedPatientState) return false;
+      if (!compatibleTypes.includes(donor.tipo_sanguineo)) return false;
+      if (!(donor.ja_doador_sangue || donor.quer_doar_sangue)) return false;
+      if (Object.prototype.hasOwnProperty.call(donor, "consentimento_contato") && donor.consentimento_contato === false) return false;
+      return true;
+    })
+    .map((donor) => {
+      const sameCity = normalizeText(donor.cidade).trim() === normalizedPatientCity;
+      const bloodPriority = compatibleTypes.indexOf(donor.tipo_sanguineo);
+      const score = [
+        sameCity ? 1 : 0,
+        normalizeText(donor.estado).trim() === normalizedPatientState ? 1 : 0,
+        bloodPriority >= 0 ? 100 - bloodPriority : 0,
+        donor.ja_doador_sangue ? 1 : 0,
+        patient.necessita_medula && donor.quer_doar_medula ? 1 : 0,
+        donor.contato_whatsapp_realizado ? 0 : 1
+      ];
+
+      return {
+        donor,
+        sameCity,
+        score
+      };
+    })
+    .sort((left, right) => compareScoreArrays(right.score, left.score));
+}
+
+function compareScoreArrays(left, right) {
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const leftValue = left[index] || 0;
+    const rightValue = right[index] || 0;
+    if (leftValue !== rightValue) return leftValue - rightValue;
+  }
+  return 0;
+}
+
+function handleMatchingAction(action, button) {
+  if (!state.matchingContext?.patient) return;
+
+  const donorId = button.dataset.donorId;
+  const donor = donorId ? findRecordById(state.donors, donorId) : null;
+  const patient = state.matchingContext.patient;
+
+  if (action === "export-csv") {
+    exportMatchingCsv();
+    return;
+  }
+
+  if (!donor) return;
+
+  if (action === "copy-message") {
+    copyMatchingMessage(patient, donor);
+    return;
+  }
+
+  if (action === "open-whatsapp") {
+    const link = getWhatsAppLink(patient, donor);
+    if (!link) {
+      showToast("Telefone do doador nao disponivel para WhatsApp.", "error");
+      return;
+    }
+    window.open(link, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  if (action === "mark-contacted") {
+    updateMatchingDonor(donor, true);
+    return;
+  }
+
+  if (action === "view-donor") {
+    openDetails("donor", donor.id);
+    return;
+  }
+
+  if (action === "edit-donor") {
+    openEditModal("donor", donor.id, {
+      returnToMatchingPatientId: patient.id
+    });
+  }
+}
+
+async function copyMatchingMessage(patient, donor) {
+  const message = buildWhatsAppMessage(patient, donor);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(message);
+    } else {
+      const field = document.createElement("textarea");
+      field.value = message;
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand("copy");
+      field.remove();
+    }
+    showToast("Mensagem copiada.");
+  } catch (error) {
+    console.error("[Matching] copyMatchingMessage", error);
+    showToast("Nao foi possivel copiar a mensagem.", "error");
+  }
+}
+
+async function updateMatchingDonor(donor, completed) {
+  state.isUpdatingMatch = true;
+  renderMatchingModal();
+
+  try {
+    const updatedDonor = await updateDonorContactStatus(donor, completed);
+    replaceRecordInState("donor", updatedDonor);
+    populateFilters();
+    renderAll();
+    showToast("Contato WhatsApp atualizado.");
+  } catch (error) {
+    console.error("[Matching] updateMatchingDonor", error);
+    showToast(error.message || "Nao foi possivel atualizar o contato do doador.", "error");
+  } finally {
+    state.isUpdatingMatch = false;
+    if (state.matchingContext) {
+      renderMatchingModal();
+    }
+  }
+}
+
+function buildWhatsAppMessage(patient, donor) {
+  return `Ol\u00e1, ${donor.nome || "doador"}. Aqui \u00e9 da equipe Flamedula.
+
+Temos um paciente precisando de doa\u00e7\u00e3o de sangue do tipo ${patient.tipo_sanguineo || "-"} no hospital ${patient.hospital || "-"}, em ${patient.cidade || "-"}/${patient.estado || "-"}.
+
+Voc\u00ea se cadastrou como poss\u00edvel doador na nossa base.
+Pode receber as orienta\u00e7\u00f5es para verificar se consegue ajudar?
+
+Responda:
+1 - Tenho interesse
+2 - N\u00e3o posso agora
+3 - N\u00e3o quero receber novos contatos`;
+}
+
+function getWhatsAppPhone(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.startsWith("55") ? digits : `55${digits}`;
+}
+
+function getWhatsAppLink(patient, donor) {
+  const phone = getWhatsAppPhone(donor.telefone);
+  if (!phone) return "";
+  return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsAppMessage(patient, donor))}`;
+}
+
+function exportMatchingCsv() {
+  const context = state.matchingContext;
+  if (!context) return;
+
+  if (!context.matches.length) {
+    showToast("Nao ha dados para exportar", "error");
+    return;
+  }
+
+  const rows = context.matches.map((match) => ({
+    paciente: context.patient.nome_paciente,
+    hospital: context.patient.hospital,
+    paciente_cidade: context.patient.cidade,
+    paciente_estado: context.patient.estado,
+    paciente_tipo_sanguineo: context.patient.tipo_sanguineo,
+    doador: match.donor.nome,
+    telefone: match.donor.telefone,
+    cidade: match.donor.cidade,
+    estado: match.donor.estado,
+    tipo_sanguineo: match.donor.tipo_sanguineo,
+    quer_doar_medula: yesNo(match.donor.quer_doar_medula),
+    contato_whatsapp: match.donor.contato_whatsapp_realizado ? "Realizado" : "Pendente",
+    mesma_cidade: match.sameCity ? "Sim" : "Nao"
+  }));
+
+  downloadCSV(toCsv(rows, [
+    { label: "paciente", value: "paciente" },
+    { label: "hospital", value: "hospital" },
+    { label: "paciente_cidade", value: "paciente_cidade" },
+    { label: "paciente_estado", value: "paciente_estado" },
+    { label: "paciente_tipo_sanguineo", value: "paciente_tipo_sanguineo" },
+    { label: "doador", value: "doador" },
+    { label: "telefone", value: "telefone" },
+    { label: "cidade", value: "cidade" },
+    { label: "estado", value: "estado" },
+    { label: "tipo_sanguineo", value: "tipo_sanguineo" },
+    { label: "quer_doar_medula", value: "quer_doar_medula" },
+    { label: "contato_whatsapp", value: "contato_whatsapp" },
+    { label: "mesma_cidade", value: "mesma_cidade" }
+  ]), `flamedula_matching_${slugify(context.patient.nome_paciente || "paciente")}.csv`);
+
+  showToast("CSV do matching gerado.");
 }
 
 function exportActiveTab() {
@@ -679,6 +1247,7 @@ function exportDonorsCsv(rows, filename) {
     { label: "origem", value: "origem" },
     { label: "observacoes", value: "observacoes" }
   ]), filename);
+
   showToast("CSV gerado com dados reais.");
 }
 
@@ -707,6 +1276,7 @@ function exportPatientsCsv(rows, filename) {
     { label: "origem", value: "origem" },
     { label: "observacoes", value: "observacoes" }
   ]), filename);
+
   showToast("CSV gerado com dados reais.");
 }
 
@@ -728,6 +1298,7 @@ function exportDonationsCsv(rows, filename) {
     { label: "payment_id", value: "payment_id" },
     { label: "origem", value: "origem" }
   ]), filename);
+
   showToast("CSV gerado com dados reais.");
 }
 
@@ -776,7 +1347,194 @@ function exportReportCsv() {
     { label: "valor", value: "valor" },
     { label: "created_at", value: "created_at" }
   ]), "flamedula_relatorio_consolidado.csv");
+
   showToast("CSV gerado com dados reais.");
+}
+
+function renderTextField(label, name, value, type = "text") {
+  return `
+    <label class="field">
+      <span>${escapeHtml(label)}</span>
+      <input type="${type}" name="${escapeHtml(name)}" value="${escapeHtml(value ?? "")}">
+    </label>
+  `;
+}
+
+function renderNumberField(label, name, value, min, max, step) {
+  return `
+    <label class="field">
+      <span>${escapeHtml(label)}</span>
+      <input type="number" name="${escapeHtml(name)}" value="${escapeHtml(value ?? "")}" min="${min}" max="${max}" step="${step}">
+    </label>
+  `;
+}
+
+function renderSelectField(label, name, selectedValue, options, labelFn = (value) => value) {
+  return `
+    <label class="field">
+      <span>${escapeHtml(label)}</span>
+      <select name="${escapeHtml(name)}">
+        <option value="">Selecione</option>
+        ${options.map((option) => `
+          <option value="${escapeHtml(option)}" ${String(option) === String(selectedValue || "") ? "selected" : ""}>
+            ${escapeHtml(labelFn(option))}
+          </option>
+        `).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderBooleanField(label, name, value, trueLabel = "Sim", falseLabel = "Nao") {
+  return `
+    <label class="field">
+      <span>${escapeHtml(label)}</span>
+      <select name="${escapeHtml(name)}">
+        <option value="true" ${value ? "selected" : ""}>${escapeHtml(trueLabel)}</option>
+        <option value="false" ${!value ? "selected" : ""}>${escapeHtml(falseLabel)}</option>
+      </select>
+    </label>
+  `;
+}
+
+function renderTextareaField(label, name, value) {
+  return `
+    <label class="field field-span-2">
+      <span>${escapeHtml(label)}</span>
+      <textarea name="${escapeHtml(name)}" rows="4">${escapeHtml(value ?? "")}</textarea>
+    </label>
+  `;
+}
+
+function buildDonorPayload(formData) {
+  return {
+    nome: getStringValue(formData, "nome"),
+    email: getStringValue(formData, "email"),
+    telefone: getStringValue(formData, "telefone"),
+    cidade: getStringValue(formData, "cidade"),
+    estado: getStringValue(formData, "estado"),
+    idade: getNumberValue(formData, "idade"),
+    peso: getNumberValue(formData, "peso"),
+    tipo_sanguineo: getStringValue(formData, "tipo_sanguineo"),
+    ja_doador_sangue: getBooleanValue(formData, "ja_doador_sangue"),
+    quer_doar_sangue: getBooleanValue(formData, "quer_doar_sangue"),
+    quer_doar_medula: getBooleanValue(formData, "quer_doar_medula"),
+    contato_whatsapp_realizado: getBooleanValue(formData, "contato_whatsapp_realizado"),
+    status: getStringValue(formData, "status"),
+    observacoes: getNullableStringValue(formData, "observacoes")
+  };
+}
+
+function buildPatientPayload(formData) {
+  return {
+    nome_paciente: getStringValue(formData, "nome_paciente"),
+    idade: getNumberValue(formData, "idade"),
+    diagnostico: getNullableStringValue(formData, "diagnostico"),
+    tipo_sanguineo: getStringValue(formData, "tipo_sanguineo"),
+    necessita_medula: getBooleanValue(formData, "necessita_medula"),
+    hospital: getNullableStringValue(formData, "hospital"),
+    cidade: getNullableStringValue(formData, "cidade"),
+    estado: getNullableStringValue(formData, "estado"),
+    nome_medico: getNullableStringValue(formData, "nome_medico"),
+    crm_medico: getNullableStringValue(formData, "crm_medico"),
+    telefone_responsavel: getNullableStringValue(formData, "telefone_responsavel"),
+    contato_whatsapp_realizado: getBooleanValue(formData, "contato_whatsapp_realizado"),
+    status: getStringValue(formData, "status"),
+    observacoes: getNullableStringValue(formData, "observacoes")
+  };
+}
+
+function getStringValue(formData, key) {
+  return String(formData.get(key) || "").trim();
+}
+
+function getNullableStringValue(formData, key) {
+  const value = getStringValue(formData, key);
+  return value || null;
+}
+
+function getNumberValue(formData, key) {
+  const value = String(formData.get(key) || "").trim();
+  if (!value) return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function getBooleanValue(formData, key) {
+  return String(formData.get(key)) === "true";
+}
+
+function getRecordForEntity(entityType, id) {
+  return entityType === "donor"
+    ? findRecordById(state.donors, id)
+    : findRecordById(state.patients, id);
+}
+
+function replaceRecordInState(entityType, updatedRecord) {
+  if (entityType === "donor") {
+    state.donors = state.donors.map((item) => (
+      String(item.id) === String(updatedRecord.id) ? { ...item, ...updatedRecord } : item
+    ));
+    return;
+  }
+
+  state.patients = state.patients.map((item) => (
+    String(item.id) === String(updatedRecord.id) ? { ...item, ...updatedRecord } : item
+  ));
+}
+
+function removeRecordFromState(entityType, id) {
+  if (entityType === "donor") {
+    state.donors = state.donors.filter((item) => String(item.id) !== String(id));
+    return;
+  }
+
+  state.patients = state.patients.filter((item) => String(item.id) !== String(id));
+}
+
+function findRecordById(collection, id) {
+  return collection.find((item) => String(item.id) === String(id));
+}
+
+function slugify(value) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    || "registro";
+}
+
+function openModal({ kicker, title, bodyMarkup, modalClass = "", bodyClass = "" }) {
+  const modal = document.getElementById("detailModal");
+  const modalBody = document.getElementById("modalBody");
+  if (!modal || !modalBody) return;
+
+  modal.classList.remove("matching-modal", "form-modal");
+  modalBody.classList.remove("matching-body", "form-body");
+
+  if (modalClass) modal.classList.add(modalClass);
+  if (bodyClass) modalBody.classList.add(bodyClass);
+
+  document.getElementById("modalKicker").textContent = kicker;
+  document.getElementById("modalTitle").textContent = title;
+  modalBody.innerHTML = bodyMarkup;
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+  createIcons();
+
+  document.getElementById("btnCancelEntityForm")?.addEventListener("click", closeModal);
+}
+
+function closeModal() {
+  state.matchingContext = null;
+  state.formContext = null;
+  state.isUpdatingMatch = false;
+
+  const modal = document.getElementById("detailModal");
+  const modalBody = document.getElementById("modalBody");
+  modal?.classList.remove("open", "matching-modal", "form-modal");
+  modal?.setAttribute("aria-hidden", "true");
+  modalBody?.classList.remove("matching-body", "form-body");
+  if (modalBody) modalBody.innerHTML = "";
 }
 
 function emptyRow(colspan, message) {
