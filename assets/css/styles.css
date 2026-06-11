@@ -679,6 +679,204 @@ tbody tr:hover {
   border-color: rgba(196, 18, 48, 0.18);
 }
 
+#tab-donors .table-card,
+#tab-patients .table-card,
+#tab-donations .table-card {
+  display: none;
+}
+
+.record-list {
+  display: grid;
+  gap: 12px;
+}
+
+.record-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  backdrop-filter: blur(18px);
+}
+
+.record-main {
+  min-width: 0;
+}
+
+.record-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.record-title-row strong {
+  display: block;
+  font-size: 1.02rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.record-title-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.blood-chip,
+.amount-chip {
+  flex: 0 0 auto;
+  min-height: 38px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  background: rgba(196, 18, 48, 0.12);
+  color: var(--red);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.amount-chip {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.record-meta,
+.record-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.record-meta span {
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.record-meta svg {
+  width: 15px;
+  height: 15px;
+}
+
+.record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.record-actions .action-button {
+  min-height: 40px;
+}
+
+.donation-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.55fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.supporter-ranking-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  backdrop-filter: blur(18px);
+}
+
+.supporter-ranking-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.supporter-ranking-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.demo-note {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.supporter-list {
+  display: grid;
+  gap: 10px;
+}
+
+.supporter-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+  padding: 10px;
+}
+
+.supporter-position {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--wine);
+  color: var(--white);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+
+.supporter-row strong,
+.supporter-row small,
+.supporter-row span {
+  display: block;
+}
+
+.supporter-row small,
+.supporter-row div > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.supporter-score {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.empty-list-state {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 26px;
+  color: var(--muted);
+  text-align: center;
+  font-weight: 800;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -712,7 +910,8 @@ tbody tr:hover {
 .badge.status-novo,
 .badge.status-em-contato,
 .badge.status-acompanhamento,
-.badge.status-encaminhado-redome {
+.badge.status-encaminhado-redome,
+.badge.status-intencao-recorrente {
   background: var(--blue-bg);
   color: var(--blue);
 }
@@ -876,6 +1075,18 @@ tbody tr:hover {
   max-height: calc(90vh - 92px);
   overflow: auto;
   padding: 20px 22px 22px;
+}
+
+.detail-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 0 6px;
+}
+
+.danger-text {
+  color: var(--danger);
 }
 
 .matching-modal .modal-card {
@@ -1197,6 +1408,10 @@ tbody tr:hover {
   .insight-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .donation-workspace {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1024px) {
@@ -1251,6 +1466,17 @@ tbody tr:hover {
 
   .donor-filters-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .record-card {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .record-actions {
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
   }
 }
 
@@ -1333,6 +1559,24 @@ tbody tr:hover {
 
   .matching-row-actions {
     grid-template-columns: 1fr;
+  }
+
+  .record-title-row,
+  .supporter-ranking-header {
+    flex-direction: column;
+  }
+
+  .record-actions .action-button {
+    width: 100%;
+  }
+
+  .supporter-row {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .supporter-score {
+    grid-column: 2;
+    justify-items: start;
   }
 
   .prototype-credentials,

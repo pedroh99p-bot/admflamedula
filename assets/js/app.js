@@ -308,35 +308,13 @@ function renderDonors() {
   const donors = getFilteredDonors();
   document.getElementById("donorResultCount").textContent = `${formatNumber(donors.length)} registros`;
 
-  const tbody = document.getElementById("donorsTableBody");
-  if (!tbody) return;
+  const list = document.getElementById("donorsList");
+  if (!list) return;
 
-  tbody.innerHTML = donors
+  list.innerHTML = donors
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .map((donor) => `
-      <tr>
-        <td><div class="cell-main"><strong>${escapeHtml(donor.nome)}</strong><small>${escapeHtml(donor.id)}</small></div></td>
-        <td>${escapeHtml(donor.telefone)}</td>
-        <td>${escapeHtml(donor.email)}</td>
-        <td>${escapeHtml(donor.cidade)}/${escapeHtml(donor.estado)}</td>
-        <td>${donor.idade ?? "-"}</td>
-        <td>${donor.peso ?? "-"}${donor.peso ? " kg" : ""}</td>
-        <td><strong>${escapeHtml(donor.tipo_sanguineo || "-")}</strong></td>
-        <td>${yesNo(donor.ja_doador_sangue)}</td>
-        <td>${yesNo(donor.quer_doar_medula)}</td>
-        <td><span class="badge ${donor.contato_whatsapp_realizado ? "positive" : "warning"}">${donor.contato_whatsapp_realizado ? "Realizado" : "Pendente"}</span></td>
-        <td><span class="badge ${statusClass(donor.status)}">${getDonorStatusLabel(donor.status)}</span></td>
-        <td>${formatDate(donor.created_at)}</td>
-        <td>
-          <div class="row-actions">
-            <button class="icon-button" type="button" title="Visualizar" data-detail-type="donor" data-id="${escapeHtml(donor.id)}"><i data-lucide="eye"></i></button>
-            <button class="icon-button" type="button" title="Editar" data-edit-entity="donor" data-id="${escapeHtml(donor.id)}"><i data-lucide="pencil"></i></button>
-            <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="donor" data-id="${escapeHtml(donor.id)}" data-name="${escapeHtml(donor.nome || "doador")}"><i data-lucide="trash-2"></i></button>
-          </div>
-        </td>
-      </tr>
-    `)
-    .join("") || emptyRow(13, "Nenhum registro encontrado");
+    .map(renderDonorCard)
+    .join("") || emptyListState("Nenhum doador encontrado no filtro atual.");
 }
 
 function renderPatients() {
@@ -350,35 +328,13 @@ function renderPatients() {
     { label: "WhatsApp pendente", value: patients.filter((patient) => !patient.contato_whatsapp_realizado).length, detail: "Aguardando orientacao", icon: "clock", tone: "yellow" }
   ]);
 
-  const tbody = document.getElementById("patientsTableBody");
-  if (!tbody) return;
+  const list = document.getElementById("patientsList");
+  if (!list) return;
 
-  tbody.innerHTML = patients
+  list.innerHTML = patients
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .map((patient) => `
-      <tr>
-        <td><div class="cell-main"><strong>${escapeHtml(patient.nome_paciente)}</strong><small>${formatDate(patient.created_at)}</small></div></td>
-        <td>${patient.idade ?? "-"}</td>
-        <td>${escapeHtml(patient.diagnostico || "-")}</td>
-        <td>${escapeHtml(patient.hospital || "-")}</td>
-        <td>${escapeHtml(patient.cidade || "-")}/${escapeHtml(patient.estado || "-")}</td>
-        <td><strong>${escapeHtml(patient.tipo_sanguineo || "-")}</strong></td>
-        <td>${yesNo(patient.necessita_medula)}</td>
-        <td><span class="badge ${patient.contato_whatsapp_realizado ? "positive" : "warning"}">${patient.contato_whatsapp_realizado ? "Realizado" : "Pendente"}</span></td>
-        <td>${escapeHtml(patient.nome_medico || "-")}</td>
-        <td>${escapeHtml(patient.crm_medico || "-")}</td>
-        <td><span class="badge ${statusClass(patient.status)}">${getPatientStatusLabel(patient.status)}</span></td>
-        <td>
-          <div class="row-actions">
-            <button class="icon-button" type="button" title="Visualizar" data-detail-type="patient" data-id="${escapeHtml(patient.id)}"><i data-lucide="eye"></i></button>
-            <button class="icon-button" type="button" title="Editar" data-edit-entity="patient" data-id="${escapeHtml(patient.id)}"><i data-lucide="pencil"></i></button>
-            <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="patient" data-id="${escapeHtml(patient.id)}" data-name="${escapeHtml(patient.nome_paciente || "paciente")}"><i data-lucide="trash-2"></i></button>
-            <button class="table-action-button table-action-button-primary" type="button" data-match-patient-id="${escapeHtml(patient.id)}">Encontrar doadores</button>
-          </div>
-        </td>
-      </tr>
-    `)
-    .join("") || emptyRow(12, "Nenhum registro encontrado");
+    .map(renderPatientCard)
+    .join("") || emptyListState("Nenhum paciente encontrado.");
 }
 
 function renderDonations() {
@@ -390,27 +346,228 @@ function renderDonations() {
     { label: "Total arrecadado", value: total, detail: "Pagamentos confirmados", icon: "dollar-sign", tone: "green", featured: true, format: "currency" },
     { label: "Quantidade de doacoes", value: donations.length, detail: "Registros reais", icon: "receipt", tone: "blue" },
     { label: "Ticket medio", value: paidDonations.length ? total / paidDonations.length : 0, detail: "Media real", icon: "calculator", tone: "red", format: "currency" },
+    { label: "Intencoes recorrentes", value: donations.filter(isRecurringDonation).length, detail: "Pix recorrente ou intencao", icon: "repeat", tone: "blue" },
     { label: "Doacoes pendentes", value: donations.filter((donation) => donation.status_pagamento === "pendente").length, detail: "Status pendente", icon: "clock", tone: "yellow" }
   ]);
 
-  const tbody = document.getElementById("donationsTableBody");
-  if (!tbody) return;
+  const list = document.getElementById("donationsList");
+  if (!list) return;
 
-  tbody.innerHTML = donations
+  list.innerHTML = donations
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-    .map((donation) => `
-      <tr>
-        <td><strong>${escapeHtml(donation.nome || "-")}</strong></td>
-        <td>${escapeHtml(donation.email || "-")}</td>
-        <td>${escapeHtml(donation.telefone || "-")}</td>
-        <td>${formatCurrency(donation.valor)}</td>
-        <td>${escapeHtml(donation.metodo_pagamento || "-")}</td>
-        <td><span class="badge ${statusClass(donation.status_pagamento)}">${getPaymentStatusLabel(donation.status_pagamento)}</span></td>
-        <td>${formatDate(donation.created_at)}</td>
-        <td><button class="icon-button" type="button" title="Visualizar" data-detail-type="donation" data-id="${escapeHtml(donation.id)}"><i data-lucide="eye"></i></button></td>
-      </tr>
-    `)
-    .join("") || emptyRow(8, "Nenhum registro encontrado");
+    .map(renderDonationCard)
+    .join("") || emptyListState("Nenhuma doacao monetaria encontrada.");
+
+  renderSupporterRanking(donations);
+}
+
+function renderDonorCard(donor) {
+  const phoneAvailable = Boolean(getWhatsAppPhone(donor.telefone));
+
+  return `
+    <article class="record-card">
+      <div class="record-main">
+        <div class="record-title-row">
+          <div>
+            <strong>${escapeHtml(donor.nome || "-")}</strong>
+            <small>${escapeHtml(donor.telefone || "Telefone nao informado")}</small>
+          </div>
+          <span class="blood-chip">${escapeHtml(donor.tipo_sanguineo || "-")}</span>
+        </div>
+        <div class="record-meta">
+          <span><i data-lucide="map-pin"></i>${escapeHtml(donor.cidade || "-")} / ${escapeHtml(donor.estado || "-")}</span>
+          <span><i data-lucide="mail"></i>${escapeHtml(donor.email || "-")}</span>
+          <span><i data-lucide="calendar"></i>${formatDate(donor.created_at)}</span>
+        </div>
+        <div class="record-badges">
+          <span class="badge ${donor.ja_doador_sangue ? "positive" : "info"}">${donor.ja_doador_sangue ? "Ja doador" : "Interessado"}</span>
+          <span class="badge ${donor.quer_doar_medula ? "positive" : "info"}">Medula: ${yesNo(donor.quer_doar_medula)}</span>
+          <span class="badge ${donor.consentimento_contato === false ? "danger" : "positive"}">Contato: ${donor.consentimento_contato === false ? "Nao" : "Sim"}</span>
+          <span class="badge ${donor.contato_whatsapp_realizado ? "positive" : "warning"}">${donor.contato_whatsapp_realizado ? "WhatsApp realizado" : "WhatsApp pendente"}</span>
+          <span class="badge ${statusClass(donor.status)}">${getDonorStatusLabel(donor.status)}</span>
+        </div>
+      </div>
+      <div class="record-actions">
+        <button class="action-button primary" type="button" data-detail-type="donor" data-id="${escapeHtml(donor.id)}">
+          <i data-lucide="panel-right-open"></i>
+          <span>Ver detalhes</span>
+        </button>
+        <button class="icon-button" type="button" title="WhatsApp" ${phoneAvailable ? "" : "disabled"} data-donor-whatsapp-id="${escapeHtml(donor.id)}"><i data-lucide="message-circle"></i></button>
+        <button class="icon-button" type="button" title="Editar" data-edit-entity="donor" data-id="${escapeHtml(donor.id)}"><i data-lucide="pencil"></i></button>
+        <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="donor" data-id="${escapeHtml(donor.id)}" data-name="${escapeHtml(donor.nome || "doador")}"><i data-lucide="trash-2"></i></button>
+      </div>
+    </article>
+  `;
+}
+
+function renderPatientCard(patient) {
+  const phoneAvailable = Boolean(getWhatsAppPhone(patient.telefone_responsavel));
+
+  return `
+    <article class="record-card">
+      <div class="record-main">
+        <div class="record-title-row">
+          <div>
+            <strong>${escapeHtml(patient.nome_paciente || "-")}</strong>
+            <small>${escapeHtml(patient.hospital || "Hospital nao informado")}</small>
+          </div>
+          <span class="blood-chip">${escapeHtml(patient.tipo_sanguineo || "-")}</span>
+        </div>
+        <div class="record-meta">
+          <span><i data-lucide="map-pin"></i>${escapeHtml(patient.cidade || "-")} / ${escapeHtml(patient.estado || "-")}</span>
+          <span><i data-lucide="activity"></i>${escapeHtml(patient.diagnostico || "Necessidade nao informada")}</span>
+          <span><i data-lucide="user-round"></i>${escapeHtml(patient.nome_medico || "Medico nao informado")}</span>
+        </div>
+        <div class="record-badges">
+          <span class="badge ${patient.necessita_medula ? "positive" : "info"}">Medula: ${yesNo(patient.necessita_medula)}</span>
+          <span class="badge ${patient.contato_whatsapp_realizado ? "positive" : "warning"}">${patient.contato_whatsapp_realizado ? "WhatsApp realizado" : "WhatsApp pendente"}</span>
+          <span class="badge ${statusClass(patient.status)}">${getPatientStatusLabel(patient.status)}</span>
+        </div>
+      </div>
+      <div class="record-actions">
+        <button class="action-button primary" type="button" data-detail-type="patient" data-id="${escapeHtml(patient.id)}">
+          <i data-lucide="panel-right-open"></i>
+          <span>Ver detalhes</span>
+        </button>
+        <button class="action-button secondary" type="button" data-match-patient-id="${escapeHtml(patient.id)}">
+          <i data-lucide="search-check"></i>
+          <span>Encontrar doadores</span>
+        </button>
+        <button class="icon-button" type="button" title="WhatsApp responsavel" ${phoneAvailable ? "" : "disabled"} data-patient-whatsapp-id="${escapeHtml(patient.id)}"><i data-lucide="message-circle"></i></button>
+        <button class="icon-button" type="button" title="Editar" data-edit-entity="patient" data-id="${escapeHtml(patient.id)}"><i data-lucide="pencil"></i></button>
+        <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="patient" data-id="${escapeHtml(patient.id)}" data-name="${escapeHtml(patient.nome_paciente || "paciente")}"><i data-lucide="trash-2"></i></button>
+      </div>
+    </article>
+  `;
+}
+
+function renderDonationCard(donation) {
+  return `
+    <article class="record-card donation-card">
+      <div class="record-main">
+        <div class="record-title-row">
+          <div>
+            <strong>${escapeHtml(donation.nome || "Apoiador sem nome")}</strong>
+            <small>${escapeHtml(donation.email || donation.telefone || "Contato nao informado")}</small>
+          </div>
+          <span class="amount-chip">${formatCurrency(donation.valor)}</span>
+        </div>
+        <div class="record-meta">
+          <span><i data-lucide="credit-card"></i>${escapeHtml(donation.metodo_pagamento || "-")}</span>
+          <span><i data-lucide="calendar"></i>${formatDate(donation.created_at)}</span>
+          <span><i data-lucide="phone"></i>${escapeHtml(donation.telefone || "-")}</span>
+        </div>
+        <div class="record-badges">
+          <span class="badge ${statusClass(donation.status_pagamento)}">${getPaymentStatusLabel(donation.status_pagamento)}</span>
+          <span class="badge ${isRecurringDonation(donation) ? "positive" : "info"}">${isRecurringDonation(donation) ? "Recorrente" : "Apoio unico"}</span>
+        </div>
+      </div>
+      <div class="record-actions">
+        <button class="action-button primary" type="button" data-detail-type="donation" data-id="${escapeHtml(donation.id)}">
+          <i data-lucide="panel-right-open"></i>
+          <span>Ver detalhes</span>
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function renderSupporterRanking(donations) {
+  const container = document.getElementById("supporterRanking");
+  if (!container) return;
+
+  const ranking = buildSupporterRanking(donations);
+  const usingDemo = !ranking.length;
+  const rows = usingDemo ? getDemoSupporters() : ranking;
+
+  container.innerHTML = `
+    <div class="supporter-ranking-header">
+      <div>
+        <p class="eyebrow">${usingDemo ? "DEMO" : "Ranking real"}</p>
+        <h3>Ranking de apoiadores</h3>
+      </div>
+      <span class="badge ${usingDemo ? "warning" : "positive"}">${usingDemo ? "Visual" : "Supabase"}</span>
+    </div>
+    ${usingDemo ? `<p class="demo-note">Demonstracao visual do ranking - os dados reais aparecerao aqui quando houver apoios registrados.</p>` : ""}
+    <div class="supporter-list">
+      ${rows.map((supporter, index) => renderSupporterRow(supporter, index)).join("")}
+    </div>
+  `;
+}
+
+function renderSupporterRow(supporter, index) {
+  const level = getSupporterLevel(supporter.points);
+
+  return `
+    <article class="supporter-row">
+      <span class="supporter-position">${index + 1}</span>
+      <div>
+        <strong>${escapeHtml(supporter.name)}</strong>
+        <small>${formatCurrency(supporter.total)} em ${formatNumber(supporter.count)} apoio(s)</small>
+        <span>${escapeHtml(level.reward)}</span>
+      </div>
+      <div class="supporter-score">
+        <strong>${formatNumber(supporter.points)}</strong>
+        <span class="badge ${level.className}">${escapeHtml(level.label)}</span>
+      </div>
+    </article>
+  `;
+}
+
+function buildSupporterRanking(donations) {
+  const groups = new Map();
+
+  donations.forEach((donation) => {
+    const key = getSupporterKey(donation);
+    if (!key) return;
+
+    const current = groups.get(key) || {
+      name: donation.nome || donation.email || donation.telefone || "Apoiador",
+      total: 0,
+      count: 0,
+      recurring: false
+    };
+
+    current.total += Number(donation.valor || 0);
+    current.count += 1;
+    current.recurring = current.recurring || isRecurringDonation(donation);
+    groups.set(key, current);
+  });
+
+  return [...groups.values()]
+    .map((supporter) => ({
+      ...supporter,
+      points: Math.round(supporter.total + (supporter.recurring ? 50 : 0) + (supporter.count * 10))
+    }))
+    .filter((supporter) => supporter.total > 0 || supporter.count > 0)
+    .sort((left, right) => right.points - left.points)
+    .slice(0, 5);
+}
+
+function getSupporterKey(donation) {
+  return normalizeText(donation.email || donation.telefone || donation.nome).trim();
+}
+
+function isRecurringDonation(donation) {
+  return donation.metodo_pagamento === "pix_recorrente"
+    || donation.status_pagamento === "intencao_recorrente";
+}
+
+function getSupporterLevel(points) {
+  if (points >= 500) return { label: "Embaixador", reward: "Camisa + bone + destaque especial", className: "positive" };
+  if (points >= 300) return { label: "Ouro", reward: "Camisa Flamedula", className: "warning" };
+  if (points >= 150) return { label: "Prata", reward: "Certificado + destaque no painel", className: "info" };
+  if (points >= 50) return { label: "Bronze", reward: "Certificado digital", className: "info" };
+  return { label: "Inicial", reward: "Reconhecimento em construcao", className: "info" };
+}
+
+function getDemoSupporters() {
+  return [
+    { name: "Marina Costa", total: 520, count: 4, recurring: true, points: 610 },
+    { name: "Rafael Lima", total: 300, count: 2, recurring: false, points: 320 },
+    { name: "Ana Beatriz", total: 150, count: 3, recurring: true, points: 230 },
+    { name: "Joao Pedro", total: 80, count: 1, recurring: false, points: 90 }
+  ];
 }
 
 function renderRegions() {
@@ -608,6 +765,25 @@ function handleClickActions(event) {
     return;
   }
 
+  const donorWhatsappButton = event.target.closest("[data-donor-whatsapp-id]");
+  if (donorWhatsappButton) {
+    openDonorWhatsApp(donorWhatsappButton.dataset.donorWhatsappId);
+    return;
+  }
+
+  const patientWhatsappButton = event.target.closest("[data-patient-whatsapp-id]");
+  if (patientWhatsappButton) {
+    openPatientWhatsApp(patientWhatsappButton.dataset.patientWhatsappId);
+    return;
+  }
+
+  const markDonorButton = event.target.closest("[data-mark-donor-contacted]");
+  if (markDonorButton) {
+    const donor = findRecordById(state.donors, markDonorButton.dataset.markDonorContacted);
+    if (donor) updateMatchingDonor(donor, true);
+    return;
+  }
+
   const matchButton = event.target.closest("[data-match-patient-id]");
   if (matchButton) {
     openMatchingModal(matchButton.dataset.matchPatientId);
@@ -693,15 +869,70 @@ function openDetails(type, id) {
   openModal({
     kicker: details.kicker,
     title: details.title,
-    bodyMarkup: details.fields.map(([label, value]) => `
+    bodyMarkup: `
+      ${buildDetailActions(type, record)}
+      ${details.fields.map(([label, value]) => `
       <div class="detail-tile">
         <span>${escapeHtml(label)}</span>
         <strong>${escapeHtml(value)}</strong>
       </div>
-    `).join(""),
+    `).join("")}
+    `,
     modalClass: "",
     bodyClass: ""
   });
+}
+
+function buildDetailActions(type, record) {
+  if (type === "donor") {
+    const phoneAvailable = Boolean(getWhatsAppPhone(record.telefone));
+    return `
+      <div class="detail-actions">
+        <button class="action-button primary" type="button" ${phoneAvailable ? "" : "disabled"} data-donor-whatsapp-id="${escapeHtml(record.id)}">
+          <i data-lucide="message-circle"></i>
+          <span>Enviar WhatsApp</span>
+        </button>
+        <button class="action-button secondary" type="button" data-mark-donor-contacted="${escapeHtml(record.id)}">
+          <i data-lucide="check-check"></i>
+          <span>Marcar contato realizado</span>
+        </button>
+        <button class="action-button ghost" type="button" data-edit-entity="donor" data-id="${escapeHtml(record.id)}">
+          <i data-lucide="pencil"></i>
+          <span>Editar</span>
+        </button>
+        <button class="action-button ghost danger-text" type="button" data-delete-entity="donor" data-id="${escapeHtml(record.id)}" data-name="${escapeHtml(record.nome || "doador")}">
+          <i data-lucide="trash-2"></i>
+          <span>Excluir</span>
+        </button>
+      </div>
+    `;
+  }
+
+  if (type === "patient") {
+    const phoneAvailable = Boolean(getWhatsAppPhone(record.telefone_responsavel));
+    return `
+      <div class="detail-actions">
+        <button class="action-button primary" type="button" data-match-patient-id="${escapeHtml(record.id)}">
+          <i data-lucide="search-check"></i>
+          <span>Encontrar doadores compativeis</span>
+        </button>
+        <button class="action-button secondary" type="button" ${phoneAvailable ? "" : "disabled"} data-patient-whatsapp-id="${escapeHtml(record.id)}">
+          <i data-lucide="message-circle"></i>
+          <span>WhatsApp responsavel</span>
+        </button>
+        <button class="action-button ghost" type="button" data-edit-entity="patient" data-id="${escapeHtml(record.id)}">
+          <i data-lucide="pencil"></i>
+          <span>Editar</span>
+        </button>
+        <button class="action-button ghost danger-text" type="button" data-delete-entity="patient" data-id="${escapeHtml(record.id)}" data-name="${escapeHtml(record.nome_paciente || "paciente")}">
+          <i data-lucide="trash-2"></i>
+          <span>Excluir</span>
+        </button>
+      </div>
+    `;
+  }
+
+  return `<div class="detail-actions"><span class="badge info">Detalhes do apoio financeiro</span></div>`;
 }
 
 function openEditModal(entityType, id, options = {}) {
@@ -1164,6 +1395,34 @@ function getWhatsAppLink(patient, donor) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(buildWhatsAppMessage(patient, donor))}`;
 }
 
+function openDonorWhatsApp(donorId) {
+  const donor = findRecordById(state.donors, donorId);
+  if (!donor) return;
+
+  const phone = getWhatsAppPhone(donor.telefone);
+  if (!phone) {
+    showToast("Telefone do doador nao disponivel para WhatsApp.", "error");
+    return;
+  }
+
+  const message = `Ola, ${donor.nome || "doador"}. Aqui e da equipe Flamedula. Podemos falar sobre seu cadastro de doacao?`;
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+}
+
+function openPatientWhatsApp(patientId) {
+  const patient = findRecordById(state.patients, patientId);
+  if (!patient) return;
+
+  const phone = getWhatsAppPhone(patient.telefone_responsavel);
+  if (!phone) {
+    showToast("Telefone do responsavel nao disponivel para WhatsApp.", "error");
+    return;
+  }
+
+  const message = `Ola. Aqui e da equipe Flamedula sobre o caso de ${patient.nome_paciente || "paciente"}. Podemos alinhar as informacoes do cadastro?`;
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+}
+
 function exportMatchingCsv() {
   const context = state.matchingContext;
   if (!context) return;
@@ -1539,6 +1798,10 @@ function closeModal() {
 
 function emptyRow(colspan, message) {
   return `<tr><td colspan="${colspan}"><div class="empty-row">${escapeHtml(message)}</div></td></tr>`;
+}
+
+function emptyListState(message) {
+  return `<div class="empty-list-state">${escapeHtml(message)}</div>`;
 }
 
 function toggleSidebar() {

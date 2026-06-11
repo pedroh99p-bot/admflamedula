@@ -110,7 +110,8 @@ export function getPaymentStatusLabel(status) {
   const labels = {
     pago: "Pago",
     pendente: "Pendente",
-    cancelado: "Cancelado"
+    cancelado: "Cancelado",
+    intencao_recorrente: "Intencao recorrente"
   };
   return labels[status] || status || "-";
 }
