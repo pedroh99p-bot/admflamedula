@@ -111,7 +111,10 @@ export function getPaymentStatusLabel(status) {
     pago: "Pago",
     pendente: "Pendente",
     cancelado: "Cancelado",
-    intencao_recorrente: "Intencao recorrente"
+    confirmado: "Confirmado",
+    confirmado_demo: "Confirmado demo",
+    intencao_recorrente: "Intencao recorrente",
+    redirecionado_plataforma: "Redirecionado plataforma"
   };
   return labels[status] || status || "-";
 }

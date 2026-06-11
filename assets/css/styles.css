@@ -340,6 +340,37 @@ img {
   box-shadow: none;
 }
 
+.demo-toggle {
+  min-height: 44px;
+  border: 1px solid var(--border-strong);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.demo-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+}
+
+.demo-mode-banner {
+  margin-bottom: 18px;
+  border: 1px solid rgba(183, 121, 31, 0.28);
+  border-radius: var(--radius);
+  background: var(--yellow-bg);
+  color: var(--yellow);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-soft);
+  font-weight: 800;
+}
+
 .icon-button.danger:hover {
   background: var(--danger-bg);
   border-color: var(--danger);
@@ -547,6 +578,10 @@ img {
   background: var(--surface);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(16px);
+}
+
+.donation-filters-grid {
+  grid-template-columns: minmax(220px, 360px);
 }
 
 .donor-filters-grid {
@@ -893,6 +928,8 @@ tbody tr:hover {
 .badge.positive,
 .badge.status-apto,
 .badge.status-pago,
+.badge.status-confirmado,
+.badge.status-confirmado-demo,
 .badge.status-compatibilidade-encontrada {
   background: var(--green-bg);
   color: var(--green);
@@ -907,13 +944,20 @@ tbody tr:hover {
 }
 
 .badge.info,
+.badge.demo,
 .badge.status-novo,
 .badge.status-em-contato,
 .badge.status-acompanhamento,
 .badge.status-encaminhado-redome,
+.badge.status-redirecionado-plataforma,
 .badge.status-intencao-recorrente {
   background: var(--blue-bg);
   color: var(--blue);
+}
+
+.badge.demo {
+  background: rgba(196, 18, 48, 0.12);
+  color: var(--red);
 }
 
 .badge.danger,
@@ -1194,6 +1238,28 @@ tbody tr:hover {
 .matching-results {
   display: grid;
   gap: 12px;
+}
+
+.priority-section {
+  display: grid;
+  gap: 10px;
+}
+
+.priority-section + .priority-section {
+  margin-top: 8px;
+}
+
+.priority-section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.priority-section-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 900;
 }
 
 .matching-row {

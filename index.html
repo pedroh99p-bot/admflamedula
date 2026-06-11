@@ -135,6 +135,10 @@
             <i data-lucide="download"></i>
             <span>CSV</span>
           </button>
+          <label class="demo-toggle" for="demoModeToggle">
+            <input id="demoModeToggle" type="checkbox">
+            <span>Modo Demo/Teste</span>
+          </label>
           <button class="icon-button" type="button" id="btnTheme" aria-label="Alternar tema">
             <i data-lucide="moon"></i>
           </button>
@@ -146,6 +150,9 @@
 
       <main class="content">
         <div class="dashboard-alert" id="dashboardAlert" hidden></div>
+        <div class="demo-mode-banner" id="demoModeBanner" hidden>
+          Modo Demo ativo: dados FIC sao ficticios e aparecem apenas para teste visual.
+        </div>
         <section class="tab-panel active" id="tab-overview" data-title="Visão Geral" data-kicker="Indicadores principais">
           <div class="section-heading">
             <div>
@@ -323,6 +330,22 @@
           </div>
 
           <div class="metrics-grid compact" id="donationMetrics"></div>
+
+          <div class="filters-grid donation-filters-grid">
+            <label>
+              <span>Filtro financeiro</span>
+              <select id="donationTypeFilter">
+                <option value="">Todos</option>
+                <option value="pix">Pix</option>
+                <option value="cartao">Cartao</option>
+                <option value="plataforma">Plataforma</option>
+                <option value="recorrente">Recorrente</option>
+                <option value="pendente">Pendente</option>
+                <option value="confirmado">Confirmado</option>
+                <option value="redirecionado">Redirecionado</option>
+              </select>
+            </label>
+          </div>
 
           <article class="card chart-card">
             <div class="card-header">
