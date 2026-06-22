@@ -1,4 +1,4 @@
-const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.FLAMEDULA_CONFIG || {};
+const { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = window.FLAMEDULA_CONFIG || {};
 
 function createUnavailableClient(message) {
   const error = new Error(message);
@@ -35,11 +35,17 @@ let client;
 
 if (!window.supabase) {
   client = createUnavailableClient("Supabase JS nao foi carregado antes do client.");
-} else if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  client = createUnavailableClient("Configuracao do Supabase ausente em window.FLAMEDULA_CONFIG.");
+} else if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  client = createUnavailableClient("Configuracao do Supabase ausente. Defina SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY em window.FLAMEDULA_CONFIG.");
 } else {
   client = window.__flamedulaSupabase
-    || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    || window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
 }
 
 export const supabaseClient = client;

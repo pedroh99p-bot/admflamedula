@@ -87,6 +87,10 @@ export function isWithinDays(isoString, days) {
 export function getDonorStatusLabel(status) {
   const labels = {
     novo: "Novo",
+    contatado: "Contatado",
+    acionavel: "Acionavel",
+    aguardando_retorno: "Aguardando retorno",
+    arquivado: "Arquivado",
     em_contato: "Em contato",
     apto: "Apto",
     aguardando_documentos: "Aguardando docs",
@@ -97,16 +101,31 @@ export function getDonorStatusLabel(status) {
 }
 
 export function getPatientStatusLabel(status) {
+  const newSchemaLabels = {
+    novo: "Novo",
+    aguardando_informacao: "Aguardando informacao",
+    mobilizacao_ativa: "Mobilizacao ativa",
+    encerrado: "Encerrado",
+    arquivado: "Arquivado"
+  };
+  if (newSchemaLabels[status]) return newSchemaLabels[status];
   const labels = {
     em_analise: "Em análise",
     urgente: "Urgente",
     acompanhamento: "Acompanhamento",
-    compatibilidade_encontrada: "Compatibilidade encontrada"
+    compatibilidade_encontrada: "Mobilizacao encontrada"
   };
   return labels[status] || status || "-";
 }
 
 export function getPaymentStatusLabel(status) {
+  const newSchemaLabels = {
+    pending_payment_setup: "Aguardando configuracao",
+    paid: "Pago",
+    failed: "Falhou",
+    canceled: "Cancelado"
+  };
+  if (newSchemaLabels[status]) return newSchemaLabels[status];
   const labels = {
     pago: "Pago",
     pendente: "Pendente",

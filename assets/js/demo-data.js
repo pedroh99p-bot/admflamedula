@@ -109,11 +109,11 @@ export const demoPatients = [
     telefone_responsavel: "21988880001",
     autorizacao_divulgacao: true,
     usar_nome_paciente: true,
-    mensagem_publica: "Paciente FIC precisa de doadores compativeis A+ no Rio de Janeiro.",
+    mensagem_publica: "Paciente FIC precisa de mobilizacao de doadores A+ no Rio de Janeiro.",
     contato_whatsapp_realizado: false,
     status: "urgente",
     origem: "fic_demo_frontend",
-    observacoes: "Cenario FIC para matching A+ RJ.",
+    observacoes: "Cenario FIC para mobilizacao A+ RJ.",
     created_at: dateDaysAgo(1),
     __isDemo: true
   },
@@ -138,7 +138,7 @@ export const demoPatients = [
     contato_whatsapp_realizado: false,
     status: "em_analise",
     origem: "fic_demo_frontend",
-    observacoes: "Cenario FIC para matching O+ SP.",
+    observacoes: "Cenario FIC para mobilizacao O+ SP.",
     created_at: dateDaysAgo(2),
     __isDemo: true
   },

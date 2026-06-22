@@ -7,7 +7,7 @@
   <title>Flamedula ADM - Dashboard MVP</title>
   <link rel="icon" type="image/png" href="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png">
   <link rel="apple-touch-icon" href="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; connect-src 'self' https://javakacjomavyocnwejt.supabase.co; frame-ancestors 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data: https://res.cloudinary.com; connect-src 'self' https://*.supabase.co https://api.cloudinary.com; frame-ancestors 'none';">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="X-Frame-Options" content="DENY">
   <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -23,33 +23,6 @@
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="./assets/js/config.js"></script>
-  <script>
-    window.__flamedulaBootstrap = (async function () {
-      try {
-        window.__flamedulaSupabase = window.supabase.createClient(
-          window.FLAMEDULA_CONFIG.SUPABASE_URL,
-          window.FLAMEDULA_CONFIG.SUPABASE_ANON_KEY
-        );
-        var result = await window.__flamedulaSupabase.auth.getSession();
-        if (result.error) {
-          throw result.error;
-        }
-
-        if (result.data && result.data.session) {
-          document.documentElement.classList.remove("auth-checking");
-          document.documentElement.classList.add("auth-ready");
-          return result.data.session;
-        }
-      } catch (error) {
-        console.error("[Supabase Auth] bootstrap", error);
-      }
-
-      document.documentElement.classList.remove("auth-checking");
-      document.documentElement.classList.add("redirect-login");
-      window.location.replace("./login.html");
-      return null;
-    })();
-  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -89,6 +62,10 @@
         <button class="nav-item" type="button" data-tab="regions">
           <i data-lucide="map-pin"></i>
           <span>Regiões</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="content">
+          <i data-lucide="panel-top"></i>
+          <span>Conteudo</span>
         </button>
         <button class="nav-item" type="button" data-tab="reports">
           <i data-lucide="file-text"></i>
@@ -436,6 +413,38 @@
           </div>
         </section>
 
+        <section class="tab-panel" id="tab-content" data-title="Conteudo" data-kicker="Landing futura">
+          <div class="section-heading">
+            <div>
+              <h2>Conteudo publico</h2>
+              <p>CRUD administrativo para tabelas de conteudo e assets Cloudinary</p>
+            </div>
+            <button class="action-button primary" type="button" id="btnCreateContent">
+              <i data-lucide="plus"></i>
+              <span>Novo conteudo</span>
+            </button>
+          </div>
+
+          <div class="filters-grid content-filters-grid">
+            <label>
+              <span>Tipo de conteudo</span>
+              <select id="contentTypeFilter">
+                <option value="hero_news">Hero/news</option>
+                <option value="actions">Acoes</option>
+                <option value="media_items">Midias</option>
+                <option value="testimonials">Depoimentos</option>
+                <option value="team_members">Equipe</option>
+                <option value="faq_items">FAQ</option>
+                <option value="transparency_metrics">Transparencia</option>
+                <option value="site_settings">Configuracoes do site</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="metrics-grid compact" id="contentMetrics"></div>
+          <div class="record-list content-list" id="contentList"></div>
+        </section>
+
         <section class="tab-panel" id="tab-reports" data-title="Relatórios" data-kicker="Exportação e filtros">
           <div class="section-heading">
             <div>
@@ -498,7 +507,7 @@
                 </div>
                 <div class="status-row">
                   <span>Status Supabase</span>
-                  <strong class="badge info">Conectado via anon key</strong>
+                  <strong class="badge info">Conectado via publishable key</strong>
                 </div>
                 <div class="status-row">
                   <span>Login</span>
@@ -528,10 +537,11 @@
                 <h3>Status da integração</h3>
               </div>
               <ul class="check-list">
-                <li>Leitura feita nas tabelas donor_leads, patients e monetary_donations.</li>
+                <li>Leitura feita nas tabelas donor_leads, patient_cases, donation_intents e tabelas de conteudo.</li>
                 <li>Autenticação feita com Supabase Auth no frontend.</li>
                 <li>Estados vazios exibem zero, tabelas vazias e gráficos sem dados.</li>
-                <li>Somente anon key no cliente; service_role permanece fora do frontend.</li>
+                <li>Somente publishable key no cliente; service_role permanece fora do frontend.</li>
+                <li>Upload Cloudinary usa Edge Function assinada; API secret nao vai para o navegador.</li>
               </ul>
             </article>
           </div>

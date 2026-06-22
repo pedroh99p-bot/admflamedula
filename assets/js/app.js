@@ -8,6 +8,41 @@ import {
 } from "./api.js";
 import { handleLogout, requireAuth } from "./auth.js";
 import { renderDonationChart, renderOverviewCharts, renderRegionCharts } from "./charts.js";
+import {
+  createAction,
+  createFaqItem,
+  createHeroNews,
+  createMediaItem,
+  createSiteSetting,
+  createTeamMember,
+  createTestimonial,
+  createTransparencyMetric,
+  deleteAction,
+  deleteFaqItem,
+  deleteHeroNews,
+  deleteMediaItem,
+  deleteSiteSetting,
+  deleteTeamMember,
+  deleteTestimonial,
+  deleteTransparencyMetric,
+  listActions,
+  listFaqItems,
+  listHeroNews,
+  listMediaItems,
+  listSiteSettings,
+  listTeamMembers,
+  listTestimonials,
+  listTransparencyMetrics,
+  updateAction,
+  updateFaqItem,
+  updateHeroNews,
+  updateMediaItem,
+  updateSiteSetting,
+  updateTeamMember,
+  updateTestimonial,
+  updateTransparencyMetric
+} from "./services/contentService.js";
+import { uploadSignedMediaAsset } from "./services/cloudinaryService.js";
 import { demoDonations, demoDonors, demoPatients } from "./demo-data.js";
 import { showToast } from "./toast.js";
 import {
@@ -44,12 +79,76 @@ const bloodCompatibility = {
 };
 
 const bloodTypes = ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"];
-const donorStatuses = ["novo", "em_contato", "apto", "aguardando_documentos", "encaminhado_redome", "inativo"];
-const patientStatuses = ["em_analise", "urgente", "acompanhamento", "compatibilidade_encontrada"];
+const donorStatuses = ["novo", "contatado", "acionavel", "aguardando_retorno", "arquivado"];
+const patientStatuses = ["novo", "em_analise", "aguardando_informacao", "mobilizacao_ativa", "encerrado", "arquivado"];
+const contentServices = {
+  hero_news: {
+    label: "Hero/news",
+    uploadTarget: "hero",
+    list: listHeroNews,
+    create: createHeroNews,
+    update: updateHeroNews,
+    delete: deleteHeroNews
+  },
+  actions: {
+    label: "Acoes",
+    uploadTarget: "actions",
+    list: listActions,
+    create: createAction,
+    update: updateAction,
+    delete: deleteAction
+  },
+  media_items: {
+    label: "Midias",
+    uploadTarget: "media",
+    list: listMediaItems,
+    create: createMediaItem,
+    update: updateMediaItem,
+    delete: deleteMediaItem
+  },
+  testimonials: {
+    label: "Depoimentos",
+    uploadTarget: "testimonials",
+    list: listTestimonials,
+    create: createTestimonial,
+    update: updateTestimonial,
+    delete: deleteTestimonial
+  },
+  team_members: {
+    label: "Equipe",
+    uploadTarget: "team",
+    list: listTeamMembers,
+    create: createTeamMember,
+    update: updateTeamMember,
+    delete: deleteTeamMember
+  },
+  faq_items: {
+    label: "FAQ",
+    list: listFaqItems,
+    create: createFaqItem,
+    update: updateFaqItem,
+    delete: deleteFaqItem
+  },
+  transparency_metrics: {
+    label: "Transparencia",
+    list: listTransparencyMetrics,
+    create: createTransparencyMetric,
+    update: updateTransparencyMetric,
+    delete: deleteTransparencyMetric
+  },
+  site_settings: {
+    label: "Configuracoes do site",
+    list: listSiteSettings,
+    create: createSiteSetting,
+    update: updateSiteSetting,
+    delete: deleteSiteSetting
+  }
+};
 
 const state = {
   activeTab: "overview",
   session: null,
+  adminProfile: null,
   globalQuery: "",
   donorFilters: {
     estado: "",
@@ -68,6 +167,14 @@ const state = {
   donors: [],
   patients: [],
   donations: [],
+  dashboardMetrics: [],
+  regionSummary: [],
+  contentSummary: [],
+  contentType: "hero_news",
+  contentRows: [],
+  contentLoading: false,
+  contentError: "",
+  contentFormContext: null,
   dataErrors: [],
   matchingContext: null,
   formContext: null,
@@ -119,6 +226,7 @@ async function initApp() {
 
   state.session = await requireAuth();
   if (!state.session) return;
+  state.adminProfile = state.session.adminProfile || null;
 
   document.documentElement.classList.remove("auth-checking", "redirect-login");
   document.documentElement.classList.add("auth-ready");
@@ -135,6 +243,9 @@ async function loadDashboardData() {
   state.donors = dashboardData.donorLeads || [];
   state.patients = dashboardData.patients || [];
   state.donations = dashboardData.monetaryDonations || [];
+  state.dashboardMetrics = dashboardData.dashboardMetrics || [];
+  state.regionSummary = dashboardData.regionSummary || [];
+  state.contentSummary = dashboardData.contentSummary || [];
   state.dataErrors = dashboardData.errors || [];
 
   populateFilters();
@@ -186,6 +297,11 @@ function bindEvents() {
   bindFilter("reportPeriodFilter", "reportFilters", "periodo");
   bindFilter("reportStateFilter", "reportFilters", "estado");
   bindFilter("reportBloodFilter", "reportFilters", "tipo_sanguineo");
+  document.getElementById("contentTypeFilter")?.addEventListener("change", async (event) => {
+    state.contentType = event.target.value;
+    await loadContentRows();
+  });
+  document.getElementById("btnCreateContent")?.addEventListener("click", () => openContentFormModal());
 
   document.getElementById("btnClearDonorFilters")?.addEventListener("click", () => {
     state.donorFilters = {
@@ -212,6 +328,7 @@ function bindEvents() {
 
   document.addEventListener("click", handleClickActions);
   document.addEventListener("submit", handleEntityFormSubmit);
+  document.addEventListener("submit", handleContentFormSubmit);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeModal();
   });
@@ -264,6 +381,10 @@ function setActiveTab(tab, updateHash = true) {
     history.replaceState(null, "", `#${target}`);
   }
 
+  if (target === "content" && !state.contentRows.length && !state.contentLoading) {
+    loadContentRows();
+  }
+
   closeSidebar();
   renderActiveCharts();
   createIcons();
@@ -277,6 +398,7 @@ function renderAll() {
   renderPatients();
   renderDonations();
   renderRegions();
+  renderContent();
   renderReports();
   renderActiveCharts();
 
@@ -290,6 +412,8 @@ function renderAll() {
     if (state.matchingContext) {
       renderMatchingModal();
     }
+  } else if (state.contentFormContext) {
+    renderContentFormModal();
   }
 
   createIcons();
@@ -320,21 +444,20 @@ function renderOverview() {
   const donors = getGlobalDonors();
   const patients = getGlobalPatients();
   const donations = getGlobalDonations();
-  const paidDonations = donations.filter(isConfirmedDonation);
-  const pendingDonations = donations.filter((donation) => donation.status_pagamento === "pendente");
-  const whatsappDone = donors.filter((donor) => donor.contato_whatsapp_realizado).length;
-  const whatsappPending = donors.length - whatsappDone;
+  const metrics = getDashboardMetricMap();
+  const contentPublished = getMetricValue(metrics, "published_content", sumBy(state.contentSummary, "publicados"));
+  const activeActions = getMetricValue(metrics, "active_actions", getContentCount("actions", "destaques"));
   const sourceDetail = state.demoMode ? "Real + FIC no front" : "Registros reais";
 
   renderMetrics("overviewMetrics", [
-    { label: "Total de doadores", value: donors.length, detail: sourceDetail, icon: "users", tone: "red", featured: true },
-    { label: "Ja doam sangue", value: donors.filter((donor) => donor.ja_doador_sangue).length, detail: "Historico positivo", icon: "droplet", tone: "green" },
-    { label: "Interessados em medula", value: donors.filter((donor) => donor.quer_doar_medula).length, detail: "Leads reais", icon: "heart", tone: "red" },
-    { label: "Pacientes cadastrados", value: patients.length, detail: state.demoMode ? "Casos reais + FIC" : "Casos em acompanhamento", icon: "activity", tone: "blue" },
-    { label: "WhatsApp realizado", value: whatsappDone, detail: "Contatos com doadores", icon: "message-circle", tone: "green" },
-    { label: "WhatsApp pendente", value: whatsappPending, detail: "Doadores sem retorno", icon: "clock", tone: "yellow" },
-    { label: "Valor total arrecadado", value: sumBy(paidDonations, "valor"), detail: "Pagamentos confirmados", icon: "dollar-sign", tone: "green", format: "currency" },
-    { label: "Doacoes pendentes", value: pendingDonations.length, detail: "Status doacao pendente", icon: "clock", tone: "yellow" }
+    { label: "Pessoas na rede", value: getMetricValue(metrics, "network_people", donors.length), detail: sourceDetail, icon: "users", tone: "red", featured: true },
+    { label: "Interessados em medula", value: getMetricValue(metrics, "marrow_interested", donors.filter((donor) => donor.quer_doar_medula).length), detail: "View Supabase", icon: "heart", tone: "red" },
+    { label: "Doadores acionaveis", value: getMetricValue(metrics, "actionable_donors", donors.filter((donor) => donor.status === "acionavel").length), detail: "Contatos autorizados", icon: "message-circle", tone: "green" },
+    { label: "Casos sinalizados", value: getMetricValue(metrics, "flagged_cases", patients.length), detail: state.demoMode ? "Casos reais + FIC" : "patient_cases", icon: "activity", tone: "blue" },
+    { label: "Intencoes de apoio", value: donations.length, detail: "donation_intents", icon: "receipt", tone: "blue" },
+    { label: "Aguardando configuracao", value: donations.filter((donation) => donation.status_pagamento === "pending_payment_setup").length, detail: "Apoio financeiro", icon: "clock", tone: "yellow" },
+    { label: "Conteudos publicados", value: contentPublished, detail: "View de conteudo", icon: "file-text", tone: "green" },
+    { label: "Acoes ativas", value: activeActions, detail: "Landing futura", icon: "calendar-check", tone: "yellow" }
   ]);
 
   const update = new Intl.DateTimeFormat("pt-BR", {
@@ -342,6 +465,22 @@ function renderOverview() {
     timeStyle: "short"
   }).format(new Date());
   document.getElementById("lastUpdate").textContent = `Atualizado em ${update}`;
+}
+
+function getDashboardMetricMap() {
+  return state.dashboardMetrics.reduce((acc, metric) => {
+    acc[metric.metric_key] = Number(metric.value || 0);
+    return acc;
+  }, {});
+}
+
+function getMetricValue(metrics, key, fallback) {
+  return Object.prototype.hasOwnProperty.call(metrics, key) ? metrics[key] : fallback;
+}
+
+function getContentCount(type, key) {
+  const item = state.contentSummary.find((entry) => entry.content_type === type);
+  return Number(item?.[key] || 0);
 }
 
 function renderDonors() {
@@ -623,7 +762,9 @@ function getSupporterKey(donation) {
 function isRecurringDonation(donation) {
   const method = normalizeText(donation.metodo_pagamento);
   const status = normalizeText(donation.status_pagamento);
+  const type = normalizeText(donation.donation_type);
   return method.includes("recorrente")
+    || type === "recurring"
     || status === "intencao_recorrente";
 }
 
@@ -631,12 +772,15 @@ function isPlatformDonation(donation) {
   const method = normalizeText(donation.metodo_pagamento);
   const status = normalizeText(donation.status_pagamento);
   return method === "plataforma_doacao"
+    || method === "platform"
+    || method.includes("platform")
     || status === "redirecionado_plataforma";
 }
 
 function isConfirmedDonation(donation) {
   const status = normalizeText(donation.status_pagamento);
   return status === "pago"
+    || status === "paid"
     || status === "confirmado"
     || status === "confirmado_demo";
 }
@@ -644,8 +788,8 @@ function isConfirmedDonation(donation) {
 function getDonationTypeLabel(donation) {
   const method = normalizeText(donation.metodo_pagamento);
   if (method.includes("pix")) return method.includes("recorrente") ? "Pix recorrente" : "Pix unico";
-  if (method.includes("cartao")) return method.includes("recorrente") ? "Cartao recorrente" : "Cartao";
-  if (method.includes("plataforma")) return "Plataforma externa";
+  if (method.includes("cartao") || method === "card") return isRecurringDonation(donation) ? "Cartao recorrente" : "Cartao";
+  if (method.includes("plataforma") || method.includes("platform")) return "Plataforma externa";
   return "Apoio financeiro";
 }
 
@@ -661,6 +805,22 @@ function isDemoId(id) {
   return String(id || "").startsWith("fic-");
 }
 
+function getAdminRole() {
+  return state.adminProfile?.role || "viewer";
+}
+
+function canMutateContent() {
+  return ["super_admin", "admin", "operator"].includes(getAdminRole());
+}
+
+function canDeleteContent() {
+  return ["super_admin", "admin"].includes(getAdminRole());
+}
+
+function canEditSiteSettings() {
+  return ["super_admin", "admin"].includes(getAdminRole());
+}
+
 function getSupporterLevel(points) {
   if (points >= 500) return { label: "Embaixador", reward: "Camisa + bone + destaque especial", className: "positive" };
   if (points >= 300) return { label: "Ouro", reward: "Camisa Flamedula", className: "warning" };
@@ -672,11 +832,511 @@ function getSupporterLevel(points) {
 function renderRegions() {
   const donors = getGlobalDonors();
   const patients = getGlobalPatients();
+  const regionEntries = state.regionSummary.length
+    ? state.regionSummary.map((row) => [`${row.cidade || "-"} / ${row.estado || "-"}`, Number(row.total_pessoas || 0)])
+    : sortEntriesByValue(countBy(donors.map((donor) => ({ cidade_estado: `${donor.cidade || "-"} / ${donor.estado || "-"}` })), "cidade_estado"), 6);
 
   renderRanking("stateRanking", sortEntriesByValue(countBy(donors, "estado"), 6));
-  renderRanking("cityRanking", sortEntriesByValue(countBy(donors.map((donor) => ({ cidade_estado: `${donor.cidade || "-"} / ${donor.estado || "-"}` })), "cidade_estado"), 6));
+  renderRanking("cityRanking", regionEntries.slice(0, 6));
   renderRanking("patientStateRanking", sortEntriesByValue(countBy(patients, "estado"), 6));
   renderRanking("bloodDemandRanking", sortEntriesByValue(countBy(patients, "tipo_sanguineo"), 8));
+}
+
+async function loadContentRows() {
+  const service = contentServices[state.contentType];
+  if (!service) return;
+
+  state.contentLoading = true;
+  state.contentError = "";
+  renderContent();
+
+  try {
+    const result = await service.list();
+    state.contentRows = result.data || [];
+    state.contentError = result.error?.message || "";
+  } catch (error) {
+    console.error("[Content] loadContentRows", error);
+    state.contentRows = [];
+    state.contentError = error.message || "Nao foi possivel carregar conteudo.";
+  } finally {
+    state.contentLoading = false;
+    renderContent();
+    createIcons();
+  }
+}
+
+function renderContent() {
+  const typeField = document.getElementById("contentTypeFilter");
+  if (typeField && typeField.value !== state.contentType) {
+    typeField.value = state.contentType;
+  }
+
+  const createButton = document.getElementById("btnCreateContent");
+  if (createButton) {
+    createButton.disabled = !canMutateCurrentContentType();
+  }
+
+  const rows = state.contentRows;
+  const published = rows.filter((row) => row.published === true).length;
+  const featured = rows.filter((row) => row.featured === true).length;
+
+  renderMetrics("contentMetrics", [
+    { label: "Registros", value: rows.length, detail: getContentTypeLabel(state.contentType), icon: "database", tone: "blue", featured: true },
+    { label: "Publicados", value: published, detail: "published = true", icon: "eye", tone: "green" },
+    { label: "Destaques", value: featured, detail: "featured = true", icon: "star", tone: "yellow" },
+    { label: "Assets", value: rows.filter(hasContentAsset).length, detail: "Cloudinary vinculado", icon: "image", tone: "red" }
+  ]);
+
+  const list = document.getElementById("contentList");
+  if (!list) return;
+
+  if (state.contentLoading) {
+    list.innerHTML = emptyListState("Carregando conteudo...");
+    return;
+  }
+
+  if (state.contentError) {
+    list.innerHTML = `
+      <div class="empty-list-state">
+        ${escapeHtml(state.contentError)}
+        <button class="action-button secondary retry-button" type="button" data-content-retry>
+          <i data-lucide="refresh-cw"></i>
+          <span>Tentar novamente</span>
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = rows
+    .slice()
+    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0))
+    .map(renderContentCard)
+    .join("") || emptyListState("Nenhum registro de conteudo encontrado.");
+}
+
+function renderContentCard(row) {
+  const title = getContentTitle(row);
+  const description = getContentDescription(row);
+  const image = row.image_url || row.thumbnail_url || row.url || "";
+  const canPublish = Object.prototype.hasOwnProperty.call(row, "published");
+  const canFeature = Object.prototype.hasOwnProperty.call(row, "featured");
+  const canMutate = canMutateCurrentContentType();
+  const canDelete = canDeleteContent();
+
+  return `
+    <article class="record-card content-card">
+      ${image ? `<img class="content-thumb" src="${escapeHtml(image)}" alt="${escapeHtml(row.image_alt || title)}">` : ""}
+      <div class="record-main">
+        <div class="record-title-row">
+          <div>
+            <strong>${escapeHtml(title)}</strong>
+            <small>${escapeHtml(description || getContentTypeLabel(state.contentType))}</small>
+          </div>
+          <span class="badge info">${escapeHtml(getContentTypeLabel(state.contentType))}</span>
+        </div>
+        <div class="record-meta">
+          <span><i data-lucide="calendar"></i>${formatDate(row.updated_at || row.created_at)}</span>
+          <span><i data-lucide="arrow-up-down"></i>Ordem ${escapeHtml(row.sort_order ?? "-")}</span>
+          ${row.cloudinary_public_id ? `<span><i data-lucide="cloud"></i>${escapeHtml(row.cloudinary_public_id)}</span>` : ""}
+        </div>
+        <div class="record-badges">
+          ${canPublish ? `<span class="badge ${row.published ? "positive" : "warning"}">${row.published ? "Publicado" : "Rascunho"}</span>` : ""}
+          ${canFeature ? `<span class="badge ${row.featured ? "positive" : "info"}">${row.featured ? "Destaque" : "Sem destaque"}</span>` : ""}
+        </div>
+      </div>
+      <div class="record-actions">
+        ${canPublish && canMutate ? `<button class="action-button secondary" type="button" data-toggle-content="published" data-id="${escapeHtml(row.id)}">
+          <i data-lucide="${row.published ? "eye-off" : "eye"}"></i>
+          <span>${row.published ? "Despublicar" : "Publicar"}</span>
+        </button>` : ""}
+        <button class="action-button ghost" type="button" data-edit-content="${escapeHtml(row.id)}" ${canMutate ? "" : "disabled"}>
+          <i data-lucide="pencil"></i>
+          <span>Editar</span>
+        </button>
+        <button class="action-button ghost danger-text" type="button" data-delete-content="${escapeHtml(row.id)}" data-name="${escapeHtml(title)}" ${canDelete ? "" : "disabled"}>
+          <i data-lucide="trash-2"></i>
+          <span>Excluir</span>
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function canMutateCurrentContentType() {
+  if (state.contentType === "site_settings") return canEditSiteSettings();
+  return canMutateContent();
+}
+
+function getContentTypeLabel(type) {
+  return contentServices[type]?.label || type;
+}
+
+function getContentTitle(row) {
+  return row.title
+    || row.name
+    || row.question
+    || row.label
+    || row.key
+    || row.author_name
+    || "Registro";
+}
+
+function getContentDescription(row) {
+  return row.subtitle
+    || row.summary
+    || row.description
+    || row.answer
+    || row.quote
+    || row.role
+    || row.category
+    || "";
+}
+
+function hasContentAsset(row) {
+  return Boolean(row.image_asset_id || row.media_asset_id || row.cloudinary_public_id || row.image_url || row.thumbnail_url);
+}
+
+function openContentFormModal(id = null) {
+  if (!canMutateCurrentContentType()) {
+    showToast("Seu perfil nao tem permissao para editar este conteudo.", "error");
+    return;
+  }
+  const record = id ? findRecordById(state.contentRows, id) : null;
+  if (id && !record) return;
+  state.formContext = null;
+  state.matchingContext = null;
+  state.contentFormContext = {
+    id: id ? String(id) : null,
+    record,
+    submitting: false
+  };
+  renderContentFormModal();
+}
+
+function renderContentFormModal() {
+  if (!state.contentFormContext) return;
+  const { record, submitting } = state.contentFormContext;
+  const typeLabel = getContentTypeLabel(state.contentType);
+
+  openModal({
+    kicker: typeLabel,
+    title: record ? `Editar ${getContentTitle(record)}` : `Novo ${typeLabel}`,
+    bodyMarkup: buildContentFormMarkup(record || {}, submitting),
+    modalClass: "form-modal content-form-modal",
+    bodyClass: "form-body"
+  });
+}
+
+function buildContentFormMarkup(record, submitting) {
+  const fields = getContentFieldMarkup(state.contentType, record);
+  const supportsUpload = Boolean(contentServices[state.contentType]?.uploadTarget);
+
+  return `
+    <form id="contentForm" class="entity-form" data-content-type="${escapeHtml(state.contentType)}">
+      <div class="form-grid">
+        ${fields}
+        ${renderNumberField("Ordem", "sort_order", record.sort_order ?? 0, -999, 9999, 1)}
+        ${Object.prototype.hasOwnProperty.call(record, "published") || state.contentType !== "site_settings" ? renderBooleanField("Publicado", "published", record.published === true) : ""}
+        ${["hero_news", "actions", "media_items"].includes(state.contentType) ? renderBooleanField("Destaque", "featured", record.featured === true) : ""}
+      </div>
+      ${supportsUpload ? `
+        ${buildContentAssetPreview(record)}
+        <label class="field field-span-2">
+          <span>Arquivo Cloudinary</span>
+          <input type="file" name="asset_file" accept="image/*,video/*">
+        </label>
+        <p class="form-hint">O arquivo e enviado com assinatura da Edge Function generate-cloudinary-signature.</p>
+      ` : ""}
+      <div class="form-actions">
+        <button class="action-button ghost" type="button" id="btnCancelEntityForm">Cancelar</button>
+        <button class="action-button primary" type="submit" ${submitting ? "disabled" : ""}>
+          <i data-lucide="${submitting ? "loader-circle" : "save"}"></i>
+          <span>${submitting ? "Salvando..." : "Salvar conteudo"}</span>
+        </button>
+      </div>
+    </form>
+  `;
+}
+
+function buildContentAssetPreview(record) {
+  const url = record.image_url || record.thumbnail_url || record.url || "";
+  if (!url) return "";
+
+  return `
+    <div class="asset-preview field-span-2">
+      <span>Asset atual</span>
+      <img src="${escapeHtml(url)}" alt="${escapeHtml(record.image_alt || getContentTitle(record))}">
+    </div>
+  `;
+}
+
+function getContentFieldMarkup(type, record) {
+  const commonImageFields = `
+    ${renderTextField("URL da imagem", "image_url", record.image_url)}
+    ${renderTextField("Texto alternativo", "image_alt", record.image_alt)}
+    ${renderTextField("Cloudinary public ID", "cloudinary_public_id", record.cloudinary_public_id)}
+  `;
+
+  if (type === "hero_news") {
+    return `
+      ${renderTextField("Titulo", "title", record.title)}
+      ${renderTextField("Categoria", "category", record.category)}
+      ${renderTextareaField("Subtitulo", "subtitle", record.subtitle)}
+      ${commonImageFields}
+      ${renderTextField("CTA label", "cta_label", record.cta_label)}
+      ${renderTextField("CTA URL", "cta_url", record.cta_url)}
+    `;
+  }
+
+  if (type === "actions") {
+    return `
+      ${renderTextField("Titulo", "title", record.title)}
+      ${renderTextField("Local", "location", record.location)}
+      ${renderTextField("Data", "action_date", record.action_date, "date")}
+      ${renderTextField("Status da acao", "action_status", record.action_status)}
+      ${renderTextareaField("Resumo", "summary", record.summary)}
+      ${commonImageFields}
+      ${renderTextField("CTA label", "cta_label", record.cta_label)}
+      ${renderTextField("CTA URL", "cta_url", record.cta_url)}
+    `;
+  }
+
+  if (type === "media_items") {
+    return `
+      ${renderTextField("Titulo", "title", record.title)}
+      ${renderTextField("Tipo", "type", record.type)}
+      ${renderTextField("Categoria", "category", record.category)}
+      ${renderTextField("URL", "url", record.url)}
+      ${renderTextField("Youtube ID", "youtube_id", record.youtube_id)}
+      ${renderTextField("Thumbnail URL", "thumbnail_url", record.thumbnail_url)}
+      ${renderTextField("Cloudinary public ID", "cloudinary_public_id", record.cloudinary_public_id)}
+      ${renderTextField("Duracao", "duration", record.duration)}
+      ${renderTextField("Fonte", "source", record.source)}
+      ${renderTextareaField("Descricao", "description", record.description)}
+    `;
+  }
+
+  if (type === "testimonials") {
+    return `
+      ${renderTextField("Autor", "author_name", record.author_name)}
+      ${renderTextField("Rotulo do autor", "author_label", record.author_label)}
+      ${renderTextareaField("Depoimento", "quote", record.quote)}
+      ${commonImageFields}
+    `;
+  }
+
+  if (type === "team_members") {
+    return `
+      ${renderTextField("Nome", "name", record.name)}
+      ${renderTextField("Papel", "role", record.role)}
+      ${renderTextField("Tipo", "member_type", record.member_type)}
+      ${renderTextareaField("Descricao", "description", record.description)}
+      ${commonImageFields}
+    `;
+  }
+
+  if (type === "faq_items") {
+    return `
+      ${renderTextField("Pergunta", "question", record.question)}
+      ${renderTextField("Categoria", "category", record.category)}
+      ${renderTextareaField("Resposta", "answer", record.answer)}
+    `;
+  }
+
+  if (type === "transparency_metrics") {
+    return `
+      ${renderTextField("Chave", "key", record.key)}
+      ${renderTextField("Label", "label", record.label)}
+      ${renderNumberField("Valor", "value", record.value, -999999999, 999999999, 0.01)}
+      ${renderTextField("Modo", "mode", record.mode)}
+      ${renderTextareaField("Descricao", "description", record.description)}
+    `;
+  }
+
+  return `
+    ${renderTextField("Chave", "key", record.key)}
+    ${renderTextareaField("JSON", "value_json", JSON.stringify(record.value_json || {}, null, 2))}
+    ${renderTextareaField("Descricao", "description", record.description)}
+  `;
+}
+
+async function handleContentFormSubmit(event) {
+  if (event.target.id !== "contentForm" || !state.contentFormContext) return;
+  event.preventDefault();
+
+  if (!canMutateCurrentContentType()) {
+    showToast("Seu perfil nao tem permissao para salvar este conteudo.", "error");
+    return;
+  }
+
+  const service = contentServices[state.contentType];
+  if (!service) return;
+
+  const form = event.target;
+  const formData = new FormData(form);
+  const id = state.contentFormContext.id;
+
+  state.contentFormContext = {
+    ...state.contentFormContext,
+    submitting: true
+  };
+  renderContentFormModal();
+
+  try {
+    const payload = await buildContentPayload(state.contentType, formData);
+    const file = formData.get("asset_file");
+    if (file?.size && service.uploadTarget) {
+      const uploadResult = await uploadSignedMediaAsset({
+        file,
+        target: service.uploadTarget,
+        resourceType: file.type?.startsWith("video/") ? "video" : "image",
+        title: payload.title || payload.name || payload.key || payload.question || file.name,
+        displayName: payload.title || payload.name || payload.key || payload.question || file.name,
+        altText: payload.image_alt || payload.title || payload.name || "",
+        assetType: state.contentType
+      });
+      attachUploadedAsset(payload, state.contentType, uploadResult);
+    }
+
+    if (id) {
+      await service.update(id, payload);
+      showToast("Conteudo atualizado com sucesso.");
+    } else {
+      await service.create(payload);
+      showToast("Conteudo criado com sucesso.");
+    }
+
+    state.contentFormContext = null;
+    closeModal();
+    await loadContentRows();
+    await loadDashboardData();
+  } catch (error) {
+    console.error("[Content] handleContentFormSubmit", error);
+    state.contentFormContext = {
+      ...state.contentFormContext,
+      submitting: false
+    };
+    renderContentFormModal();
+    showToast(error.message || "Nao foi possivel salvar conteudo.", "error");
+  }
+}
+
+async function buildContentPayload(type, formData) {
+  const payload = {};
+  const stringFields = {
+    hero_news: ["category", "title", "subtitle", "image_url", "image_alt", "cloudinary_public_id", "cta_label", "cta_url"],
+    actions: ["title", "summary", "action_date", "location", "image_url", "image_alt", "cloudinary_public_id", "cta_label", "cta_url", "action_status"],
+    media_items: ["type", "category", "title", "description", "url", "youtube_id", "thumbnail_url", "cloudinary_public_id", "duration", "source"],
+    testimonials: ["quote", "author_name", "author_label", "image_url", "image_alt", "cloudinary_public_id"],
+    team_members: ["name", "role", "description", "member_type", "image_url", "image_alt", "cloudinary_public_id"],
+    faq_items: ["question", "answer", "category"],
+    transparency_metrics: ["key", "label", "description", "mode"],
+    site_settings: ["key", "description"]
+  }[type] || [];
+
+  stringFields.forEach((field) => {
+    payload[field] = getNullableStringValue(formData, field);
+  });
+
+  if (["hero_news", "actions", "media_items", "testimonials", "team_members", "faq_items", "transparency_metrics"].includes(type)) {
+    payload.published = getBooleanValue(formData, "published");
+  }
+
+  if (["hero_news", "actions", "media_items"].includes(type)) {
+    payload.featured = getBooleanValue(formData, "featured");
+  }
+
+  if (type !== "site_settings") {
+    payload.sort_order = getNumberValue(formData, "sort_order") || 0;
+  }
+
+  if (type === "transparency_metrics") {
+    payload.value = getNumberValue(formData, "value");
+  }
+
+  if (type === "site_settings") {
+    payload.value_json = parseJsonField(formData.get("value_json"));
+  }
+
+  return pruneUndefinedPayload(payload);
+}
+
+function attachUploadedAsset(payload, type, uploadResult) {
+  const upload = uploadResult.upload;
+  const mediaAsset = uploadResult.mediaAsset;
+  const secureUrl = upload.secure_url;
+
+  if (type === "media_items") {
+    payload.media_asset_id = mediaAsset.id;
+    payload.url = secureUrl;
+    payload.thumbnail_url = upload.thumbnail_url || secureUrl;
+  } else {
+    payload.image_asset_id = mediaAsset.id;
+    payload.image_url = secureUrl;
+  }
+
+  payload.cloudinary_public_id = upload.public_id;
+}
+
+function parseJsonField(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error("JSON invalido em configuracoes do site.");
+  }
+}
+
+function pruneUndefinedPayload(payload) {
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) delete payload[key];
+  });
+  return payload;
+}
+
+async function toggleContentPublished(id) {
+  if (!canMutateCurrentContentType()) {
+    showToast("Seu perfil nao tem permissao para publicar este conteudo.", "error");
+    return;
+  }
+
+  const service = contentServices[state.contentType];
+  const record = findRecordById(state.contentRows, id);
+  if (!service || !record) return;
+
+  try {
+    await service.update(id, { published: !record.published });
+    await loadContentRows();
+    await loadDashboardData();
+    showToast(record.published ? "Conteudo despublicado." : "Conteudo publicado.");
+  } catch (error) {
+    console.error("[Content] toggleContentPublished", error);
+    showToast(error.message || "Nao foi possivel alterar publicacao.", "error");
+  }
+}
+
+async function deleteContentRecord(id, name) {
+  if (!canDeleteContent()) {
+    showToast("Seu perfil nao tem permissao para excluir conteudo.", "error");
+    return;
+  }
+
+  const service = contentServices[state.contentType];
+  if (!service) return;
+  if (!window.confirm(`Excluir conteudo ${name || "selecionado"}?`)) return;
+
+  try {
+    await service.delete(id);
+    await loadContentRows();
+    await loadDashboardData();
+    closeModal();
+    showToast("Conteudo excluido com sucesso.");
+  } catch (error) {
+    console.error("[Content] deleteContentRecord", error);
+    showToast(error.message || "Nao foi possivel excluir conteudo.", "error");
+  }
 }
 
 function renderReports() {
@@ -784,7 +1444,7 @@ function getFilteredDonors() {
     const marrow = state.donorFilters.quer_doar_medula;
     const whatsapp = state.donorFilters.contato_whatsapp;
     return (!state.donorFilters.estado || donor.estado === state.donorFilters.estado)
-      && (!state.donorFilters.tipo_sanguineo || donor.tipo_sanguineo === state.donorFilters.tipo_sanguineo)
+      && (!state.donorFilters.tipo_sanguineo || donor.blood_donor_status === state.donorFilters.tipo_sanguineo)
       && (!state.donorFilters.status || donor.status === state.donorFilters.status)
       && (!marrow || donor.quer_doar_medula === (marrow === "sim"))
       && (!whatsapp || donor.contato_whatsapp_realizado === (whatsapp === "realizado"));
@@ -824,11 +1484,11 @@ function matchesDonationFilter(donation) {
 
   const checks = {
     pix: method.includes("pix"),
-    cartao: method.includes("cartao"),
-    plataforma: method.includes("plataforma") || status.includes("plataforma"),
+    cartao: method.includes("cartao") || method === "card",
+    plataforma: method.includes("plataforma") || method.includes("platform") || status.includes("plataforma"),
     recorrente: isRecurringDonation(donation),
-    pendente: status.includes("pendente"),
-    confirmado: status.includes("confirmado") || status === "pago",
+    pendente: status.includes("pendente") || status === "pending_payment_setup",
+    confirmado: status.includes("confirmado") || status === "pago" || status === "paid",
     redirecionado: status.includes("redirecionado")
   };
 
@@ -838,7 +1498,7 @@ function matchesDonationFilter(donation) {
 function populateFilters() {
   const donors = getDisplayDonors();
   setOptions("donorStateFilter", uniqueSorted(donors, "estado"), "Todos os estados");
-  setOptions("donorBloodFilter", uniqueSorted(donors, "tipo_sanguineo"), "Todos os tipos");
+  setOptions("donorBloodFilter", uniqueSorted(donors, "blood_donor_status"), "Todos os perfis");
   setOptions("donorStatusFilter", uniqueSorted(donors, "status"), "Todos os status", getDonorStatusLabel);
   setOptions("reportStateFilter", uniqueSorted(donors, "estado"), "Todos os estados");
   setOptions("reportBloodFilter", uniqueSorted(donors, "tipo_sanguineo"), "Todos os tipos");
@@ -883,6 +1543,30 @@ function renderActiveCharts() {
 }
 
 function handleClickActions(event) {
+  const editContentButton = event.target.closest("[data-edit-content]");
+  if (editContentButton) {
+    openContentFormModal(editContentButton.dataset.editContent);
+    return;
+  }
+
+  const deleteContentButton = event.target.closest("[data-delete-content]");
+  if (deleteContentButton) {
+    deleteContentRecord(deleteContentButton.dataset.deleteContent, deleteContentButton.dataset.name);
+    return;
+  }
+
+  const toggleContentButton = event.target.closest("[data-toggle-content]");
+  if (toggleContentButton) {
+    toggleContentPublished(toggleContentButton.dataset.id);
+    return;
+  }
+
+  const retryContentButton = event.target.closest("[data-content-retry]");
+  if (retryContentButton) {
+    loadContentRows();
+    return;
+  }
+
   const deleteButton = event.target.closest("[data-delete-entity]");
   if (deleteButton) {
     handleDeleteEntity(deleteButton.dataset.deleteEntity, deleteButton.dataset.id, deleteButton.dataset.name);
@@ -1060,7 +1744,7 @@ function buildDetailActions(type, record) {
       <div class="detail-actions">
         <button class="action-button primary" type="button" data-match-patient-id="${escapeHtml(record.id)}">
           <i data-lucide="search-check"></i>
-          <span>Encontrar doadores compativeis</span>
+          <span>Ver rede acionavel</span>
         </button>
         <button class="action-button secondary" type="button" ${phoneAvailable ? "" : "disabled"} data-patient-whatsapp-id="${escapeHtml(record.id)}">
           <i data-lucide="message-circle"></i>
@@ -1138,27 +1822,23 @@ function buildEntityFormMarkup(entityType, record, submitting) {
           ${renderTextField("Telefone", "telefone", record.telefone, "tel")}
           ${renderTextField("Cidade", "cidade", record.cidade)}
           ${renderTextField("Estado", "estado", record.estado)}
-          ${renderNumberField("Idade", "idade", record.idade, 0, 120, 1)}
-          ${renderNumberField("Peso", "peso", record.peso, 0, 300, "0.1")}
-          ${renderSelectField("Tipo sanguineo", "tipo_sanguineo", record.tipo_sanguineo, bloodTypes)}
-          ${renderBooleanField("Ja doador de sangue", "ja_doador_sangue", record.ja_doador_sangue)}
-          ${renderBooleanField("Quer doar sangue", "quer_doar_sangue", record.quer_doar_sangue)}
-          ${renderBooleanField("Quer doar medula", "quer_doar_medula", record.quer_doar_medula)}
-          ${renderBooleanField("Contato WhatsApp", "contato_whatsapp_realizado", record.contato_whatsapp_realizado, "Realizado", "Pendente")}
+          ${renderSelectField("Doador de sangue", "blood_donor_status", record.blood_donor_status, ["nao_informado", "ja_doador", "doador_recorrente", "quero_comecar", "interessado"])}
+          ${renderSelectField("Status REDOME", "redome_status", record.redome_status, ["nao_informado", "cadastrado", "nao_cadastrado"])}
+          ${renderSelectField("Interesse em medula", "medula_interest", record.medula_interest, ["nao", "sim", "quero_saber", "interessado"])}
+          ${renderSelectField("Preferencia de contato", "contact_preference", record.contact_preference, ["whatsapp", "email", "telefone"])}
+          ${renderBooleanField("Consentimento LGPD", "consent_lgpd", record.consent_lgpd)}
           ${renderSelectField("Status", "status", record.status, donorStatuses, getDonorStatusLabel)}
         ` : `
-          ${renderTextField("Nome do paciente", "nome_paciente", record.nome_paciente)}
-          ${renderNumberField("Idade", "idade", record.idade, 0, 120, 1)}
-          ${renderTextField("Diagnostico", "diagnostico", record.diagnostico)}
-          ${renderSelectField("Tipo sanguineo", "tipo_sanguineo", record.tipo_sanguineo, bloodTypes)}
-          ${renderBooleanField("Necessita medula", "necessita_medula", record.necessita_medula)}
+          ${renderTextField("Solicitante", "requester_name", record.requester_name || record.nome_paciente)}
+          ${renderTextField("Telefone solicitante", "requester_phone", record.requester_phone || record.telefone_responsavel, "tel")}
+          ${renderTextField("Identificacao do caso", "patient_identifier", record.patient_identifier || record.nome_paciente)}
+          ${renderTextField("Relacao com paciente", "relation_to_patient", record.relation_to_patient)}
           ${renderTextField("Hospital", "hospital", record.hospital)}
           ${renderTextField("Cidade", "cidade", record.cidade)}
           ${renderTextField("Estado", "estado", record.estado)}
-          ${renderTextField("Nome do medico", "nome_medico", record.nome_medico)}
-          ${renderTextField("CRM do medico", "crm_medico", record.crm_medico)}
-          ${renderTextField("Telefone responsavel", "telefone_responsavel", record.telefone_responsavel, "tel")}
-          ${renderBooleanField("Contato WhatsApp", "contato_whatsapp_realizado", record.contato_whatsapp_realizado, "Realizado", "Pendente")}
+          ${renderSelectField("Tipo de necessidade", "need_type", record.need_type || record.tipo_necessidade, ["sangue", "medula", "plaquetas", "campanha_cadastro_medula", "outro"])}
+          ${renderSelectField("Urgencia", "urgency_level", record.urgency_level || record.urgencia, ["baixa", "media", "alta"])}
+          ${renderBooleanField("Divulgacao autorizada", "consent_authorized", record.consent_authorized || record.autorizacao_divulgacao)}
           ${renderSelectField("Status", "status", record.status, patientStatuses, getPatientStatusLabel)}
         `}
       </div>
@@ -1286,8 +1966,8 @@ function renderMatchingModal() {
 
   const { patient, matches } = state.matchingContext;
   openModal({
-    kicker: "Matching",
-    title: `Doadores compativeis para ${patient.nome_paciente || "Paciente"}`,
+    kicker: "Mobilizacao",
+    title: `Rede acionavel para ${patient.nome_paciente || "Paciente"}`,
     bodyMarkup: buildMatchingModalMarkup(patient, matches),
     modalClass: "matching-modal",
     bodyClass: "matching-body"
@@ -1311,7 +1991,7 @@ function buildMatchingModalMarkup(patient, matches) {
           <div>
             <p class="eyebrow">Paciente ${isDemoRecord(patient) ? "- FIC" : "- real"}</p>
             <h3>${escapeHtml(patient.nome_paciente || "-")}</h3>
-            <p class="modal-subtitle">Lista por score: proximidade, consentimento, canal, historico e necessidade clinica.</p>
+            <p class="modal-subtitle">Lista operacional por proximidade, consentimento, canal e historico de contato.</p>
           </div>
           <button class="action-button secondary" type="button" data-matching-action="export-csv">
             <i data-lucide="file-down"></i>
@@ -1463,7 +2143,7 @@ function scoreDonorForPatient({
   if (sameNeighborhood) addScore(25, "Mesmo bairro");
   if (sameState) addScore(20, "Mesmo estado");
 
-  if (!marrowNeed && bloodCompatible) addScore(25, "Tipo sanguineo compativel");
+  if (!marrowNeed && bloodCompatible) addScore(25, "Perfil sanguineo informado");
   if (donor.ja_doador_sangue) addScore(20, "Ja doa sangue");
   if (donor.quer_doar_sangue) addScore(20, "Quer doar sangue");
   if (donor.consentimento_contato) addScore(25, "Consentimento ativo");
@@ -1749,7 +2429,7 @@ function exportMatchingCsv() {
     { label: "mesma_cidade", value: "mesma_cidade" }
   ]), `flamedula_matching_${slugify(context.patient.nome_paciente || "paciente")}.csv`);
 
-  showToast("CSV do matching gerado.");
+  showToast("CSV de mobilizacao gerado.");
 }
 
 function exportActiveTab() {
@@ -1759,6 +2439,7 @@ function exportActiveTab() {
     patients: () => exportPatientsCsv(getGlobalPatients(), "flamedula_pacientes.csv"),
     donations: () => exportDonationsCsv(getFilteredDonations(), "flamedula_doacoes.csv"),
     regions: () => exportDonorsCsv(getGlobalDonors(), "flamedula_regioes.csv"),
+    content: () => exportContentCsv(state.contentRows, `flamedula_conteudo_${state.contentType}.csv`),
     reports: exportReportCsv,
     settings: () => showToast("Nao ha dados para exportar", "error")
   };
@@ -1846,6 +2527,28 @@ function exportDonationsCsv(rows, filename) {
   showToast("CSV gerado com dados reais.");
 }
 
+function exportContentCsv(rows, filename) {
+  if (!rows.length) {
+    showToast("Nao ha dados para exportar", "error");
+    return;
+  }
+
+  downloadCSV(toCsv(rows, [
+    { label: "id", value: "id" },
+    { label: "tipo", value: () => state.contentType },
+    { label: "titulo", value: (row) => getContentTitle(row) },
+    { label: "descricao", value: (row) => getContentDescription(row) },
+    { label: "published", value: (row) => yesNo(row.published) },
+    { label: "featured", value: (row) => yesNo(row.featured) },
+    { label: "sort_order", value: "sort_order" },
+    { label: "cloudinary_public_id", value: "cloudinary_public_id" },
+    { label: "created_at", value: "created_at" },
+    { label: "updated_at", value: "updated_at" }
+  ]), filename);
+
+  showToast("CSV de conteudo gerado.");
+}
+
 function exportReportCsv() {
   const rows = [
     ...getReportDonors().map((row) => ({
@@ -1858,7 +2561,7 @@ function exportReportCsv() {
       created_at: row.created_at
     })),
     ...getReportPatients().map((row) => ({
-      tipo_registro: "patients",
+      tipo_registro: "patient_cases",
       nome: row.nome_paciente,
       estado: row.estado,
       tipo_sanguineo: row.tipo_sanguineo,
@@ -1867,7 +2570,7 @@ function exportReportCsv() {
       created_at: row.created_at
     })),
     ...getReportDonations().map((row) => ({
-      tipo_registro: "monetary_donations",
+      tipo_registro: "donation_intents",
       nome: row.nome,
       estado: "",
       tipo_sanguineo: "",
@@ -1957,34 +2660,30 @@ function buildDonorPayload(formData) {
     telefone: getStringValue(formData, "telefone"),
     cidade: getStringValue(formData, "cidade"),
     estado: getStringValue(formData, "estado"),
-    idade: getNumberValue(formData, "idade"),
-    peso: getNumberValue(formData, "peso"),
-    tipo_sanguineo: getStringValue(formData, "tipo_sanguineo"),
-    ja_doador_sangue: getBooleanValue(formData, "ja_doador_sangue"),
-    quer_doar_sangue: getBooleanValue(formData, "quer_doar_sangue"),
-    quer_doar_medula: getBooleanValue(formData, "quer_doar_medula"),
-    contato_whatsapp_realizado: getBooleanValue(formData, "contato_whatsapp_realizado"),
+    blood_donor_status: getStringValue(formData, "blood_donor_status"),
+    redome_status: getStringValue(formData, "redome_status"),
+    medula_interest: getStringValue(formData, "medula_interest"),
+    contact_preference: getStringValue(formData, "contact_preference"),
+    consent_lgpd: getBooleanValue(formData, "consent_lgpd"),
     status: getStringValue(formData, "status"),
-    observacoes: getNullableStringValue(formData, "observacoes")
+    internal_notes: getNullableStringValue(formData, "observacoes")
   };
 }
 
 function buildPatientPayload(formData) {
   return {
-    nome_paciente: getStringValue(formData, "nome_paciente"),
-    idade: getNumberValue(formData, "idade"),
-    diagnostico: getNullableStringValue(formData, "diagnostico"),
-    tipo_sanguineo: getStringValue(formData, "tipo_sanguineo"),
-    necessita_medula: getBooleanValue(formData, "necessita_medula"),
+    requester_name: getStringValue(formData, "requester_name"),
+    requester_phone: getStringValue(formData, "requester_phone"),
+    relation_to_patient: getNullableStringValue(formData, "relation_to_patient"),
+    patient_identifier: getNullableStringValue(formData, "patient_identifier"),
     hospital: getNullableStringValue(formData, "hospital"),
     cidade: getNullableStringValue(formData, "cidade"),
     estado: getNullableStringValue(formData, "estado"),
-    nome_medico: getNullableStringValue(formData, "nome_medico"),
-    crm_medico: getNullableStringValue(formData, "crm_medico"),
-    telefone_responsavel: getNullableStringValue(formData, "telefone_responsavel"),
-    contato_whatsapp_realizado: getBooleanValue(formData, "contato_whatsapp_realizado"),
+    need_type: getNullableStringValue(formData, "need_type"),
+    urgency_level: getNullableStringValue(formData, "urgency_level"),
+    consent_authorized: getBooleanValue(formData, "consent_authorized"),
     status: getStringValue(formData, "status"),
-    observacoes: getNullableStringValue(formData, "observacoes")
+    private_notes: getNullableStringValue(formData, "observacoes")
   };
 }
 
@@ -2052,7 +2751,7 @@ function openModal({ kicker, title, bodyMarkup, modalClass = "", bodyClass = "" 
   const modalBody = document.getElementById("modalBody");
   if (!modal || !modalBody) return;
 
-  modal.classList.remove("matching-modal", "form-modal");
+  modal.classList.remove("matching-modal", "form-modal", "content-form-modal");
   modalBody.classList.remove("matching-body", "form-body");
 
   if (modalClass) modal.classList.add(modalClass);
@@ -2071,11 +2770,12 @@ function openModal({ kicker, title, bodyMarkup, modalClass = "", bodyClass = "" 
 function closeModal() {
   state.matchingContext = null;
   state.formContext = null;
+  state.contentFormContext = null;
   state.isUpdatingMatch = false;
 
   const modal = document.getElementById("detailModal");
   const modalBody = document.getElementById("modalBody");
-  modal?.classList.remove("open", "matching-modal", "form-modal");
+  modal?.classList.remove("open", "matching-modal", "form-modal", "content-form-modal");
   modal?.setAttribute("aria-hidden", "true");
   modalBody?.classList.remove("matching-body", "form-body");
   if (modalBody) modalBody.innerHTML = "";

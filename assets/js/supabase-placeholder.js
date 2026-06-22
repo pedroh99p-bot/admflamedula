@@ -1,11 +1,11 @@
 export const SUPABASE_PLACEHOLDER = {
   status: "placeholder aguardando integracao",
   futureUrl: "SUPABASE_URL no arquivo .env ou em configuracao segura do deploy",
-  futureAnonKey: "SUPABASE_ANON_KEY no arquivo .env ou em configuracao segura do deploy",
-  tables: ["donor_leads", "patients", "monetary_donations"],
+  futurePublishableKey: "SUPABASE_PUBLISHABLE_KEY no arquivo de configuracao publica do deploy",
+  tables: ["donor_leads", "patient_cases", "donation_intents", "media_assets"],
   notes: [
-    "Substituir mocks por queries reais nas tabelas futuras.",
-    "Usar Supabase Auth no lugar do login fixo do MVP.",
+    "Queries reais usam RLS e Supabase Auth.",
+    "Cloudinary usa assinatura via Edge Function.",
     "Nunca expor service_role no frontend."
   ]
 };

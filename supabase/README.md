@@ -9,7 +9,8 @@ Execute no SQL Editor do Supabase ou via Supabase CLI, nesta ordem:
 1. `supabase/migrations/001_initial_schema.sql`
 2. `supabase/migrations/002_rls_policies.sql`
 3. `supabase/migrations/003_views_and_indexes.sql`
-4. Opcional em desenvolvimento: `supabase/migrations/004_seed_development.sql`
+4. `supabase/migrations/005_media_assets_and_cloudinary_links.sql`
+5. Opcional em desenvolvimento: `supabase/migrations/004_seed_development.sql`
 
 O seed usa apenas dados FIC ficticios e nao deve ser aplicado em producao.
 
@@ -49,7 +50,16 @@ O banco guarda apenas referencias:
 - `cloudinary_public_id`
 - textos alternativos e metadados
 
-Upload real deve ser implementado futuramente por backend/Edge Function com assinatura segura. Nao expor API secret no navegador.
+Upload administrativo usa a Edge Function `generate-cloudinary-signature`, que gera assinatura curta para upload direto no Cloudinary. Nao expor API secret no navegador.
+
+Configure estes segredos somente no ambiente da Function:
+
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+- `CLOUDINARY_UPLOAD_PRESET`
+- `CLOUDINARY_ASSET_FOLDER`
+- `ALLOWED_ORIGINS`
 
 ## Cartao/pagamento
 

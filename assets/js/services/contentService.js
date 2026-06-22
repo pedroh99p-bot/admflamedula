@@ -33,3 +33,28 @@ export const getMediaItem = (id) => fetchOne("media_items", id);
 export const createMediaItem = (payload) => createContent("media_items", payload);
 export const updateMediaItem = (id, payload) => updateContent("media_items", id, payload);
 export const deleteMediaItem = (id) => deleteContent("media_items", id);
+
+export const listTestimonials = (filters) => listContent("testimonials", filters);
+export const createTestimonial = (payload) => createContent("testimonials", payload);
+export const updateTestimonial = (id, payload) => updateContent("testimonials", id, payload);
+export const deleteTestimonial = (id) => deleteContent("testimonials", id);
+
+export const listTeamMembers = (filters) => listContent("team_members", filters);
+export const createTeamMember = (payload) => createContent("team_members", payload);
+export const updateTeamMember = (id, payload) => updateContent("team_members", id, payload);
+export const deleteTeamMember = (id) => deleteContent("team_members", id);
+
+export const listFaqItems = (filters) => listContent("faq_items", filters);
+export const createFaqItem = (payload) => createContent("faq_items", payload);
+export const updateFaqItem = (id, payload) => updateContent("faq_items", id, payload);
+export const deleteFaqItem = (id) => deleteContent("faq_items", id);
+
+export const listTransparencyMetrics = (filters) => listContent("transparency_metrics", filters);
+export const createTransparencyMetric = (payload) => createContent("transparency_metrics", payload);
+export const updateTransparencyMetric = (id, payload) => updateContent("transparency_metrics", id, payload);
+export const deleteTransparencyMetric = (id) => deleteContent("transparency_metrics", id);
+
+export const listSiteSettings = (filters) => fetchTable("site_settings", { filters, orderBy: "key", ascending: true });
+export const createSiteSetting = (payload) => createContent("site_settings", payload);
+export const updateSiteSetting = (id, payload) => updateContent("site_settings", id, payload);
+export const deleteSiteSetting = (id) => deleteContent("site_settings", id);

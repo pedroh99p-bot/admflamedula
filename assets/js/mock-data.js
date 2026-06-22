@@ -50,7 +50,7 @@ const doctors = [
 
 const bloodTypes = ["O+", "A+", "B+", "AB+", "O-", "A-", "B-", "AB-"];
 const donorStatuses = ["novo", "em_contato", "apto", "aguardando_documentos", "encaminhado_redome", "inativo"];
-const patientStatuses = ["em_analise", "urgente", "acompanhamento", "compatibilidade_encontrada"];
+const patientStatuses = ["em_analise", "urgente", "acompanhamento", "mobilizacao_ativa"];
 const paymentStatuses = ["pago", "pendente", "pago", "pago", "pendente", "cancelado"];
 const paymentMethods = ["Pix", "Cartão de crédito", "Boleto", "Transferência"];
 
@@ -132,7 +132,7 @@ const donationValues = [
   50, 250, 75, 120, 500, 35, 900, 80, 150, 60, 100, 45, 700, 130, 95, 340, 55, 180, 40, 220, 70, 110
 ];
 
-export const monetary_donations = donationNames.map((nome, index) => {
+export const donation_intents = donationNames.map((nome, index) => {
   const city = cities[(index + 5) % cities.length];
   return {
     id: `donation_${String(index + 1).padStart(3, "0")}`,
@@ -148,4 +148,4 @@ export const monetary_donations = donationNames.map((nome, index) => {
 
 export const MOCK_DONOR_LEADS = donor_leads;
 export const MOCK_PATIENTS = patients;
-export const MOCK_MONETARY_DONATIONS = monetary_donations;
+export const MOCK_DONATION_INTENTS = donation_intents;

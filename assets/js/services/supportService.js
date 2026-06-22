@@ -15,7 +15,3 @@ export function getDonationIntent(id) {
 export function updateDonationIntentStatus(id, status) {
   return updateRecord("donation_intents", id, { status }, "Nao foi possivel atualizar a intencao de doacao.");
 }
-
-export function listLegacyMonetaryDonations(filters = {}) {
-  return fetchTable("monetary_donations", { filters });
-}

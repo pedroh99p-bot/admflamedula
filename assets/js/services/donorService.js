@@ -2,6 +2,22 @@ import { deleteRecord, fetchOne, fetchTable, getMutationErrorMessage, supabaseCl
 
 const DONOR_TABLE = "donor_leads";
 
+function normalizeDonor(row) {
+  if (!row) return row;
+  const bloodStatus = row.blood_donor_status || "";
+  const marrowInterest = row.medula_interest || "";
+  return {
+    ...row,
+    ja_doador_sangue: ["ja_doador", "doador_recorrente", "sim"].includes(bloodStatus),
+    quer_doar_sangue: ["quero_comecar", "interessado", "sim"].includes(bloodStatus),
+    quer_doar_medula: ["sim", "interessado", "quero_saber"].includes(marrowInterest),
+    consentimento_contato: row.consent_lgpd,
+    contato_whatsapp_realizado: Boolean(row.contacted_at),
+    canal_preferido: row.contact_preference,
+    observacoes: row.internal_notes
+  };
+}
+
 export function listDonors(filters = {}) {
   return fetchTable(DONOR_TABLE, { filters });
 }
@@ -19,7 +35,8 @@ export function updateDonorNotes(id, internal_notes) {
 }
 
 export function updateDonorRecord(id, payload) {
-  return updateRecord(DONOR_TABLE, id, payload, "Nao foi possivel atualizar o doador.");
+  return updateRecord(DONOR_TABLE, id, payload, "Nao foi possivel atualizar o doador.")
+    .then(normalizeDonor);
 }
 
 export function deleteDonorRecord(id) {
@@ -31,38 +48,17 @@ export function exportDonors(filters = {}) {
 }
 
 export async function updateDonorContactStatus(donor, completed) {
-  const payload = {
-    contato_whatsapp_realizado: completed
-  };
-
-  if (completed && Object.prototype.hasOwnProperty.call(donor || {}, "ultima_notificacao_em")) {
-    payload.ultima_notificacao_em = new Date().toISOString();
-  }
-
-  if (completed && Object.prototype.hasOwnProperty.call(donor || {}, "total_notificacoes")) {
-    payload.total_notificacoes = Number(donor.total_notificacoes || 0) + 1;
-  }
-
-  let result = await supabaseClient
+  const result = await supabaseClient
     .from(DONOR_TABLE)
-    .update(payload)
+    .update({ contacted_at: completed ? new Date().toISOString() : null })
     .eq("id", donor.id)
     .select()
     .single();
-
-  if (result.error && String(result.error.message || "").toLowerCase().includes("column")) {
-    result = await supabaseClient
-      .from(DONOR_TABLE)
-      .update({ contato_whatsapp_realizado: completed })
-      .eq("id", donor.id)
-      .select()
-      .single();
-  }
 
   if (result.error) {
     console.error("[Supabase] update donor_leads contato_whatsapp_realizado", result.error);
     throw new Error(getMutationErrorMessage(result.error, "Nao foi possivel atualizar o contato do doador."));
   }
 
-  return result.data;
+  return normalizeDonor(result.data);
 }

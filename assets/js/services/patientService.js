@@ -1,7 +1,22 @@
 import { deleteRecord, fetchOne, fetchTable, updateRecord } from "./supabaseService.js";
 
-const LEGACY_PATIENT_TABLE = "patients";
 const PATIENT_CASES_TABLE = "patient_cases";
+
+function normalizePatientCase(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    nome_paciente: row.patient_identifier || row.requester_name || "Caso sinalizado",
+    telefone_responsavel: row.requester_phone,
+    diagnostico: row.campaign_context,
+    tipo_necessidade: row.need_type,
+    urgencia: row.urgency_level,
+    necessita_medula: ["medula", "campanha_cadastro_medula"].includes(row.need_type),
+    autorizacao_divulgacao: row.consent_authorized,
+    mensagem_publica: row.campaign_context,
+    observacoes: row.private_notes
+  };
+}
 
 export function listPatientCases(filters = {}) {
   return fetchTable(PATIENT_CASES_TABLE, { filters });
@@ -19,14 +34,11 @@ export function updatePatientNotes(id, private_notes) {
   return updateRecord(PATIENT_CASES_TABLE, id, { private_notes }, "Nao foi possivel atualizar as notas do caso.");
 }
 
-export function listLegacyPatients(filters = {}) {
-  return fetchTable(LEGACY_PATIENT_TABLE, { filters });
-}
-
 export function updatePatientRecord(id, payload) {
-  return updateRecord(LEGACY_PATIENT_TABLE, id, payload, "Nao foi possivel atualizar o paciente.");
+  return updateRecord(PATIENT_CASES_TABLE, id, payload, "Nao foi possivel atualizar o caso.")
+    .then(normalizePatientCase);
 }
 
 export function deletePatientRecord(id) {
-  return deleteRecord(LEGACY_PATIENT_TABLE, id, "Nao foi possivel excluir o paciente.");
+  return deleteRecord(PATIENT_CASES_TABLE, id, "Nao foi possivel excluir o caso.");
 }

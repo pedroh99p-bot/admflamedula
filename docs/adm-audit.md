@@ -21,21 +21,23 @@ Nao ha rotas reais. A navegacao do ADM acontece por abas em `index.html`:
 - Pacientes
 - Doacoes
 - Regioes
+- Conteudo
 - Relatorios
 - Configuracoes
 
-Nao existem telas dedicadas para Hero/Novidades, Acoes ou Midias. A fundacao Supabase e os services foram criados para essas entidades, mas a UI CRUD ainda precisa ser construida.
+Existe uma aba dedicada para Hero/Novidades, Acoes, Midias, Depoimentos, Equipe, FAQ, Transparencia e Configuracoes do site.
 
 ## Estado funcional
 
 - Login usa Supabase Auth.
 - Dashboard busca dados via Supabase.
 - Doadores usam `donor_leads`.
-- Pacientes/casos usam a tabela legada `patients`.
-- Apoio financeiro usa a tabela legada `monetary_donations`.
+- Pacientes/casos usam `patient_cases`.
+- Apoio financeiro usa `donation_intents`.
+- Conteudo publico usa as tabelas versionadas em `supabase/migrations/001_initial_schema.sql`.
 - Exportacao CSV existe para abas principais.
 - Modo Demo/Teste injeta dados FIC apenas no front-end.
-- Matching operacional usa score e priorizacao visual no front-end.
+- Mobilizacao operacional usa score e priorizacao visual no front-end.
 
 ## Dados mockados/demo
 
@@ -60,15 +62,11 @@ Nao existem telas dedicadas para Hero/Novidades, Acoes ou Midias. A fundacao Sup
 ## Cloudinary atual
 
 - Logo e favicon usam URL Cloudinary.
-- Nao existe upload Cloudinary no ADM.
-- Migrations incluem campos `image_url`, `thumbnail_url` e `cloudinary_public_id` para conteudo futuro.
+- Upload administrativo usa a Edge Function `generate-cloudinary-signature`.
+- Migrations incluem `media_assets` e vinculos de asset para conteudo.
 
 ## Partes ainda prototipo
 
-- CRUD visual de Hero/Novidades.
-- CRUD visual de Acoes.
-- CRUD visual de Midias.
-- Upload Cloudinary.
 - Intake publico da landing.
 - Gateway/plataforma real de pagamento.
 
@@ -77,9 +75,9 @@ Nao existem telas dedicadas para Hero/Novidades, Acoes ou Midias. A fundacao Sup
 - Login administrativo.
 - Dashboard principal.
 - Doadores/interessados.
-- Pacientes/casos existentes na tabela legada.
-- Doacoes/apoio financeiro na tabela legada.
-- Conteudo gerenciado assim que as migrations forem aplicadas e UI dedicada for criada.
+- Pacientes/casos.
+- Doacoes/apoio financeiro.
+- Conteudo gerenciado e upload Cloudinary assinado.
 
 ## Arquivos alterados nesta etapa
 

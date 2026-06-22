@@ -20,7 +20,7 @@ export async function requireAuth() {
   }
 
   try {
-    await requireActiveAdminProfile();
+    session.adminProfile = await requireActiveAdminProfile();
   } catch (error) {
     console.error("[Supabase Auth] admin profile", error);
     clearRoleCache();

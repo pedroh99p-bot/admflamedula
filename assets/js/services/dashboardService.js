@@ -1,21 +1,111 @@
 import { listDonors } from "./donorService.js";
-import { listLegacyPatients } from "./patientService.js";
-import { listLegacyMonetaryDonations } from "./supportService.js";
+import { listPatientCases } from "./patientService.js";
+import { listDonationIntents } from "./supportService.js";
 import { fetchTable } from "./supabaseService.js";
+
+function normalizeDonor(row) {
+  const bloodStatus = row.blood_donor_status || "";
+  const marrowInterest = row.medula_interest || "";
+  return {
+    ...row,
+    nome: row.nome,
+    telefone: row.telefone,
+    email: row.email,
+    cidade: row.cidade,
+    estado: row.estado,
+    tipo_sanguineo: row.tipo_sanguineo || "",
+    ja_doador_sangue: ["ja_doador", "doador_recorrente", "sim"].includes(bloodStatus),
+    quer_doar_sangue: ["quero_comecar", "interessado", "sim"].includes(bloodStatus),
+    quer_doar_medula: ["sim", "interessado", "quero_saber"].includes(marrowInterest),
+    consentimento_contato: row.consent_lgpd,
+    contato_whatsapp_realizado: Boolean(row.contacted_at),
+    canal_preferido: row.contact_preference,
+    origem: row.origem,
+    observacoes: row.internal_notes,
+    status: row.status,
+    created_at: row.created_at
+  };
+}
+
+function normalizePatientCase(row) {
+  return {
+    ...row,
+    nome_paciente: row.patient_identifier || row.requester_name || "Caso sinalizado",
+    telefone_responsavel: row.requester_phone,
+    email: row.requester_email,
+    diagnostico: row.campaign_context,
+    tipo_sanguineo: row.tipo_sanguineo || "",
+    tipo_necessidade: row.need_type,
+    urgencia: row.urgency_level,
+    necessita_medula: ["medula", "campanha_cadastro_medula"].includes(row.need_type),
+    hospital: row.hospital,
+    cidade: row.cidade,
+    estado: row.estado,
+    nome_medico: "",
+    crm_medico: "",
+    autorizacao_divulgacao: row.consent_authorized,
+    usar_nome_paciente: false,
+    mensagem_publica: row.campaign_context,
+    contato_whatsapp_realizado: false,
+    status: row.status,
+    origem: row.origem,
+    observacoes: row.private_notes,
+    created_at: row.created_at
+  };
+}
+
+function normalizeDonationIntent(row) {
+  const amount = Number(row.custom_amount || row.amount || 0);
+  const name = row.donor_type === "company"
+    ? row.company_name || row.responsible_name || "Empresa"
+    : row.name || "Apoiador";
+  return {
+    ...row,
+    nome: name,
+    email: row.email,
+    telefone: row.phone,
+    valor: amount,
+    metodo_pagamento: row.payment_method,
+    status_pagamento: row.status,
+    payment_id: row.provider_reference,
+    origem: row.source,
+    created_at: row.created_at
+  };
+}
 
 export async function getDashboardData() {
   try {
-    const [donorResult, patientResult, donationResult] = await Promise.all([
+    const [
+      donorResult,
+      patientResult,
+      donationResult,
+      metricsResult,
+      regionResult,
+      contentResult
+    ] = await Promise.all([
       listDonors(),
-      listLegacyPatients(),
-      listLegacyMonetaryDonations()
+      listPatientCases(),
+      listDonationIntents(),
+      getDashboardMetrics(),
+      getRegionSummary(),
+      getActiveContentSummary()
     ]);
 
     return {
-      donorLeads: donorResult.data,
-      patients: patientResult.data,
-      monetaryDonations: donationResult.data,
-      errors: [donorResult.error, patientResult.error, donationResult.error].filter(Boolean)
+      donorLeads: donorResult.data.map(normalizeDonor),
+      patients: patientResult.data.map(normalizePatientCase),
+      monetaryDonations: donationResult.data.map(normalizeDonationIntent),
+      dashboardMetrics: metricsResult.data,
+      regionSummary: regionResult.data,
+      contentSummary: contentResult.data,
+      errors: [
+        donorResult.error,
+        patientResult.error,
+        donationResult.error,
+        metricsResult.error,
+        regionResult.error,
+        contentResult.error
+      ].filter(Boolean)
     };
   } catch (error) {
     console.error("[Supabase] getDashboardData", error);
@@ -23,11 +113,14 @@ export async function getDashboardData() {
       donorLeads: [],
       patients: [],
       monetaryDonations: [],
+      dashboardMetrics: [],
+      regionSummary: [],
+      contentSummary: [],
       errors: [{
         source: "dashboard",
         raw: error,
         isRls: false,
-        message: "Nao foi possivel carregar os dados do Supabase."
+        message: "Nao foi possivel carregar os dados do novo Supabase."
       }]
     };
   }
@@ -38,7 +131,7 @@ export function getDashboardMetrics() {
 }
 
 export function getRegionSummary() {
-  return fetchTable("v_donor_region_summary", { orderBy: "total_pessoas" });
+  return fetchTable("v_donor_region_summary", { orderBy: null });
 }
 
 export function getActiveContentSummary() {

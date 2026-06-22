@@ -37,7 +37,9 @@ Use `assets/js/config.example.js` como referencia:
 ```js
 window.FLAMEDULA_CONFIG = {
   SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_PROJECT_REF: "",
+  SUPABASE_PUBLISHABLE_KEY: "",
+  CLOUDINARY_CLOUD_NAME: ""
 };
 ```
 
@@ -45,7 +47,9 @@ Tambem existe `.env.example` para ambientes que futuramente usem build tool:
 
 ```text
 SUPABASE_URL=
-SUPABASE_ANON_KEY=
+SUPABASE_PROJECT_REF=
+SUPABASE_PUBLISHABLE_KEY=
+CLOUDINARY_CLOUD_NAME=
 ```
 
 Nunca exponha `service_role` no frontend.
@@ -58,6 +62,7 @@ Migrations:
 supabase/migrations/001_initial_schema.sql
 supabase/migrations/002_rls_policies.sql
 supabase/migrations/003_views_and_indexes.sql
+supabase/migrations/005_media_assets_and_cloudinary_links.sql
 supabase/migrations/004_seed_development.sql
 ```
 
@@ -99,7 +104,7 @@ Esses dados:
 
 - nao sao salvos no Supabase
 - nao podem ser editados/excluidos no banco
-- servem para testar cards, graficos, filtros, ranking e matching operacional
+- servem para testar cards, graficos, filtros, ranking e mobilizacao operacional
 
 ## Landing publica
 
@@ -113,6 +118,10 @@ Recomendacao para intake publico: Edge Function com validacao, rate limit e inse
 
 ## Cloudinary
 
-O ADM esta preparado para armazenar URLs e `cloudinary_public_id`, mas nao implementa upload real.
+O upload administrativo usa a Edge Function:
 
-Upload em producao deve ser assinado por backend/Edge Function. Nao expor API secret no navegador.
+```text
+supabase/functions/generate-cloudinary-signature
+```
+
+Configure os segredos somente no ambiente da Function. Use `supabase/functions/.env.example` como referencia. Nunca exponha `CLOUDINARY_API_SECRET` no navegador ou no repositório.
