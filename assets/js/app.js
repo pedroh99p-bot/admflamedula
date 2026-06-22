@@ -175,6 +175,7 @@ const state = {
   contentLoading: false,
   contentError: "",
   contentFormContext: null,
+  modalReturnFocus: null,
   dataErrors: [],
   matchingContext: null,
   formContext: null,
@@ -302,7 +303,6 @@ function bindEvents() {
     state.contentType = event.target.value;
     await loadContentRows();
   });
-  document.getElementById("btnCreateContent")?.addEventListener("click", () => openContentFormModal());
 
   document.getElementById("btnClearDonorFilters")?.addEventListener("click", () => {
     state.donorFilters = {
@@ -874,7 +874,8 @@ function renderContent() {
 
   const createButton = document.getElementById("btnCreateContent");
   if (createButton) {
-    createButton.disabled = !canMutateCurrentContentType();
+    createButton.dataset.contentType = state.contentType;
+    createButton.disabled = state.contentLoading;
   }
 
   const rows = state.contentRows;
@@ -998,18 +999,37 @@ function hasContentAsset(row) {
   return Boolean(row.image_asset_id || row.cloudinary_public_id || row.image_url || row.thumbnail_url);
 }
 
-function openContentFormModal(id = null) {
+function openContentFormModal(id = null, options = {}) {
+  const requestedType = options.contentType || state.contentType;
+  if (requestedType && contentServices[requestedType]) {
+    state.contentType = requestedType;
+    const typeField = document.getElementById("contentTypeFilter");
+    if (typeField) typeField.value = requestedType;
+  } else if (requestedType) {
+    console.error("[Content] Tipo de conteudo invalido", requestedType);
+    showToast("Tipo de conteudo invalido.", "error");
+    return;
+  }
+
   if (!canMutateCurrentContentType()) {
     showToast("Seu perfil nao tem permissao para editar este conteudo.", "error");
     return;
   }
+
   const record = id ? findRecordById(state.contentRows, id) : null;
-  if (id && !record) return;
+  if (id && !record) {
+    console.error("[Content] Registro nao encontrado para edicao", id);
+    showToast("Registro de conteudo nao encontrado.", "error");
+    return;
+  }
+
   state.formContext = null;
   state.matchingContext = null;
+  state.modalReturnFocus = options.returnFocus || document.activeElement;
   state.contentFormContext = {
     id: id ? String(id) : null,
     record,
+    mode: id ? "edit" : "create",
     submitting: false
   };
   renderContentFormModal();
@@ -1022,7 +1042,7 @@ function renderContentFormModal() {
 
   openModal({
     kicker: typeLabel,
-    title: record ? `Editar ${getContentTitle(record)}` : `Novo ${typeLabel}`,
+    title: record ? `Editar ${getContentTitle(record)}` : `Novo conteudo`,
     bodyMarkup: buildContentFormMarkup(record || {}, submitting),
     modalClass: "form-modal content-form-modal",
     bodyClass: "form-body"
@@ -1544,9 +1564,21 @@ function renderActiveCharts() {
 }
 
 function handleClickActions(event) {
+  const newContentButton = event.target.closest("[data-action='new-content']");
+  if (newContentButton) {
+    event.preventDefault();
+    openContentFormModal(null, {
+      contentType: newContentButton.dataset.contentType,
+      returnFocus: newContentButton
+    });
+    return;
+  }
+
   const editContentButton = event.target.closest("[data-edit-content]");
   if (editContentButton) {
-    openContentFormModal(editContentButton.dataset.editContent);
+    openContentFormModal(editContentButton.dataset.editContent, {
+      returnFocus: editContentButton
+    });
     return;
   }
 
@@ -2750,7 +2782,11 @@ function slugify(value) {
 function openModal({ kicker, title, bodyMarkup, modalClass = "", bodyClass = "" }) {
   const modal = document.getElementById("detailModal");
   const modalBody = document.getElementById("modalBody");
-  if (!modal || !modalBody) return;
+  if (!modal || !modalBody) {
+    console.error("[Modal] Elementos do modal nao encontrados.");
+    showToast("Nao foi possivel abrir o modal.", "error");
+    return;
+  }
 
   modal.classList.remove("matching-modal", "form-modal", "content-form-modal");
   modalBody.classList.remove("matching-body", "form-body");
@@ -2763,23 +2799,34 @@ function openModal({ kicker, title, bodyMarkup, modalClass = "", bodyClass = "" 
   modalBody.innerHTML = bodyMarkup;
   modal.classList.add("open");
   modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
   createIcons();
 
   document.getElementById("btnCancelEntityForm")?.addEventListener("click", closeModal);
+  requestAnimationFrame(() => {
+    const focusTarget = modalBody.querySelector("input, select, textarea, button:not([disabled])");
+    focusTarget?.focus();
+  });
 }
 
 function closeModal() {
+  const returnFocus = state.modalReturnFocus;
   state.matchingContext = null;
   state.formContext = null;
   state.contentFormContext = null;
+  state.modalReturnFocus = null;
   state.isUpdatingMatch = false;
 
   const modal = document.getElementById("detailModal");
   const modalBody = document.getElementById("modalBody");
   modal?.classList.remove("open", "matching-modal", "form-modal", "content-form-modal");
   modal?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
   modalBody?.classList.remove("matching-body", "form-body");
   if (modalBody) modalBody.innerHTML = "";
+  if (returnFocus?.isConnected) {
+    requestAnimationFrame(() => returnFocus.focus());
+  }
 }
 
 function emptyRow(colspan, message) {
