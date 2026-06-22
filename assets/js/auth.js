@@ -1,14 +1,15 @@
-import { supabaseClient } from "./supabaseClient.js";
+import {
+  getCurrentAdminProfile,
+  getSession as getSupabaseSession,
+  requireActiveAdminProfile,
+  signIn,
+  signOut
+} from "./services/authService.js";
 import { clearRoleCache } from "./security.js";
 import { showToast } from "./toast.js";
 
 export async function getSession() {
-  const { data, error } = await supabaseClient.auth.getSession();
-  if (error) {
-    console.error("[Supabase Auth] getSession", error);
-    return null;
-  }
-  return data.session || null;
+  return getSupabaseSession();
 }
 
 export async function requireAuth() {
@@ -17,11 +18,23 @@ export async function requireAuth() {
     window.location.replace("./login.html");
     return null;
   }
+
+  try {
+    await requireActiveAdminProfile();
+  } catch (error) {
+    console.error("[Supabase Auth] admin profile", error);
+    clearRoleCache();
+    sessionStorage.setItem("flamedula_login_error", error.message || "Acesso administrativo nao autorizado.");
+    await signOut();
+    window.location.replace("./login.html");
+    return null;
+  }
+
   return session;
 }
 
 export async function handleLogout() {
-  const { error } = await supabaseClient.auth.signOut();
+  const { error } = await signOut();
   clearRoleCache();
   if (error) {
     console.error("[Supabase Auth] signOut", error);
@@ -44,18 +57,34 @@ function getFriendlyAuthError(error) {
   if (message.includes("email not confirmed")) {
     return "Confirme o email do usuario antes de entrar.";
   }
-  return "Nao foi possivel entrar agora. Verifique os dados e tente novamente.";
+  return error?.message || "Nao foi possivel entrar agora. Verifique os dados e tente novamente.";
+}
+
+async function redirectIfActiveSession() {
+  const existingSession = await getSession();
+  if (!existingSession) return;
+
+  const adminProfile = await getCurrentAdminProfile();
+  if (adminProfile.profile) {
+    window.location.replace("./index.html");
+    return;
+  }
+
+  await signOut();
+  setLoginError(adminProfile.message || "Acesso administrativo nao autorizado.");
 }
 
 async function initLoginForm() {
   const form = document.getElementById("loginForm");
   if (!form) return;
 
-  const existingSession = await getSession();
-  if (existingSession) {
-    window.location.replace("./index.html");
-    return;
+  const queuedError = sessionStorage.getItem("flamedula_login_error");
+  if (queuedError) {
+    sessionStorage.removeItem("flamedula_login_error");
+    setLoginError(queuedError);
   }
+
+  await redirectIfActiveSession();
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -64,12 +93,21 @@ async function initLoginForm() {
     const email = document.getElementById("loginEmail")?.value.trim();
     const password = document.getElementById("loginPassword")?.value;
 
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    const { error } = await signIn(email, password);
     if (error) {
       console.error("[Supabase Auth] signInWithPassword", error);
       const friendlyMessage = getFriendlyAuthError(error);
       setLoginError(friendlyMessage);
       showToast(friendlyMessage, "error");
+      return;
+    }
+
+    const adminProfile = await getCurrentAdminProfile();
+    if (!adminProfile.profile) {
+      await signOut();
+      const message = adminProfile.message || "Acesso administrativo nao autorizado.";
+      setLoginError(message);
+      showToast(message, "error");
       return;
     }
 

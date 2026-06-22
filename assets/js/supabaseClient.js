@@ -1,14 +1,46 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.FLAMEDULA_CONFIG || {};
 
+function createUnavailableClient(message) {
+  const error = new Error(message);
+  const response = { data: null, error };
+
+  function queryBuilder() {
+    const query = {
+      select: () => query,
+      order: () => query,
+      eq: () => query,
+      insert: () => query,
+      update: () => query,
+      delete: () => query,
+      single: async () => response,
+      maybeSingle: async () => response,
+      then: (resolve) => Promise.resolve(response).then(resolve)
+    };
+    return query;
+  }
+
+  return {
+    __unavailable: true,
+    __message: message,
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signInWithPassword: async () => response,
+      signOut: async () => ({ error: null })
+    },
+    from: () => queryBuilder()
+  };
+}
+
+let client;
+
 if (!window.supabase) {
-  throw new Error("Supabase JS nao foi carregado antes do client.");
+  client = createUnavailableClient("Supabase JS nao foi carregado antes do client.");
+} else if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  client = createUnavailableClient("Configuracao do Supabase ausente em window.FLAMEDULA_CONFIG.");
+} else {
+  client = window.__flamedulaSupabase
+    || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error("Configuracao do Supabase ausente em window.FLAMEDULA_CONFIG.");
-}
-
-export const supabaseClient = window.__flamedulaSupabase
-  || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+export const supabaseClient = client;
 window.__flamedulaSupabase = supabaseClient;

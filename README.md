@@ -1,8 +1,18 @@
-# Flamedula ADM Dashboard MVP
+# Flamedula ADM
 
-Dashboard administrativa demonstrativa do Flamedula em HTML, CSS e JavaScript puro.
+Dashboard administrativa do Flamedula em HTML, CSS e JavaScript puro.
 
-## Como rodar
+## Stack
+
+- HTML estatico: `index.html` e `login.html`
+- CSS: `assets/css/styles.css`
+- JavaScript ES Modules: `assets/js/*.js`
+- Supabase Auth e Database
+- Chart.js e Lucide via CDN
+
+Nao ha React, Vite, Next.js ou build step obrigatorio nesta versao.
+
+## Como rodar localmente
 
 Por usar ES Modules, rode com um servidor estatico local:
 
@@ -10,32 +20,99 @@ Por usar ES Modules, rode com um servidor estatico local:
 python -m http.server 8000
 ```
 
-Acesse `http://localhost:8000/login.html`.
-
-## Login de teste
-
-- Login: `flamedula10`
-- Senha: `12345`
-
-## Estrutura
+Depois acesse:
 
 ```text
-index.html
-login.html
-assets/
-  css/styles.css
-  js/app.js
-  js/auth.js
-  js/api.js
-  js/charts.js
-  js/mock-data.js
-  js/supabase-placeholder.js
-  js/utils.js
+http://localhost:8000/login.html
 ```
 
-## Status
+Se Python nao estiver disponivel, use qualquer servidor estatico equivalente.
 
-- Dados mockados para `donor_leads`, `patients` e `monetary_donations`.
-- Login fixo apenas para demonstracao MVP.
-- Supabase ainda nao conectado.
-- `assets/js/supabase-placeholder.js` documenta a futura integracao sem chaves reais.
+## Configuracao Supabase
+
+O app le `window.FLAMEDULA_CONFIG` em `assets/js/config.js`.
+
+Use `assets/js/config.example.js` como referencia:
+
+```js
+window.FLAMEDULA_CONFIG = {
+  SUPABASE_URL: "",
+  SUPABASE_ANON_KEY: ""
+};
+```
+
+Tambem existe `.env.example` para ambientes que futuramente usem build tool:
+
+```text
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+```
+
+Nunca exponha `service_role` no frontend.
+
+## Banco Supabase
+
+Migrations:
+
+```text
+supabase/migrations/001_initial_schema.sql
+supabase/migrations/002_rls_policies.sql
+supabase/migrations/003_views_and_indexes.sql
+supabase/migrations/004_seed_development.sql
+```
+
+Leia `supabase/README.md` antes de aplicar. O seed e opcional e somente para desenvolvimento.
+
+## Primeiro administrador
+
+1. Crie um usuario no Supabase Auth.
+2. Copie o UUID.
+3. Insira o perfil em `admin_profiles`:
+
+```sql
+insert into public.admin_profiles (user_id, full_name, role, active)
+values ('00000000-0000-0000-0000-000000000000', 'Primeiro Admin', 'super_admin', true);
+```
+
+Sem `admin_profiles.active = true`, o ADM bloqueia o acesso mesmo com login valido.
+
+## Services
+
+A camada modular fica em `assets/js/services`:
+
+- `authService.js`
+- `dashboardService.js`
+- `donorService.js`
+- `patientService.js`
+- `supportService.js`
+- `contentService.js`
+- `cloudinaryService.js`
+- `supabaseService.js`
+
+`assets/js/api.js` funciona como ponte de compatibilidade para a UI atual.
+
+## Dados demo
+
+`assets/js/demo-data.js` injeta dados FIC somente no front-end quando `Modo Demo/Teste` esta ativo.
+
+Esses dados:
+
+- nao sao salvos no Supabase
+- nao podem ser editados/excluidos no banco
+- servem para testar cards, graficos, filtros, ranking e matching operacional
+
+## Landing publica
+
+A landing publica nao foi conectada nesta etapa. Os contratos futuros estao em:
+
+```text
+docs/landing-supabase-contracts.md
+```
+
+Recomendacao para intake publico: Edge Function com validacao, rate limit e insert controlado.
+
+## Cloudinary
+
+O ADM esta preparado para armazenar URLs e `cloudinary_public_id`, mas nao implementa upload real.
+
+Upload em producao deve ser assinado por backend/Edge Function. Nao expor API secret no navegador.
