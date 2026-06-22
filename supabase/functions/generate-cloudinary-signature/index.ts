@@ -11,17 +11,31 @@ const allowedTargets: Record<string, string> = {
 const allowedResourceTypes = new Set(["image", "video"]);
 const allowedRoles = new Set(["super_admin", "admin", "operator"]);
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGINS") || "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS"
-};
+function getCorsHeaders(request: Request) {
+  const origin = request.headers.get("Origin") || "";
+  const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const allowOrigin = configuredOrigins.length === 0 || configuredOrigins.includes("*")
+    ? "*"
+    : configuredOrigins.includes(origin)
+      ? origin
+      : configuredOrigins[0];
 
-function jsonResponse(body: unknown, status = 200) {
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin"
+  };
+}
+
+function jsonResponse(request: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...corsHeaders,
+      ...getCorsHeaders(request),
       "Content-Type": "application/json"
     }
   });
@@ -47,27 +61,27 @@ function buildCloudinarySignature(params: Record<string, string | number>, apiSe
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: getCorsHeaders(request) });
   }
 
   if (request.method !== "POST") {
-    return jsonResponse({ error: "Method not allowed" }, 405);
+    return jsonResponse(request, { error: "Method not allowed" }, 405);
   }
 
   const cloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME");
   const apiKey = Deno.env.get("CLOUDINARY_API_KEY");
   const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
-  const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET") || "";
+  const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET");
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabasePublishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
 
-  if (!cloudName || !apiKey || !apiSecret || !supabaseUrl || !supabasePublishableKey) {
-    return jsonResponse({ error: "Edge Function secrets are not configured" }, 500);
+  if (!cloudName || !apiKey || !apiSecret || !uploadPreset || !supabaseUrl || !supabasePublishableKey) {
+    return jsonResponse(request, { error: "Edge Function secrets are not configured" }, 500);
   }
 
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) {
-    return jsonResponse({ error: "Missing bearer token" }, 401);
+    return jsonResponse(request, { error: "Missing bearer token" }, 401);
   }
 
   const supabase = createClient(supabaseUrl, supabasePublishableKey, {
@@ -78,7 +92,7 @@ Deno.serve(async (request) => {
 
   const { data: userResult, error: userError } = await supabase.auth.getUser();
   if (userError || !userResult.user) {
-    return jsonResponse({ error: "Invalid session" }, 401);
+    return jsonResponse(request, { error: "Invalid session" }, 401);
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -89,18 +103,18 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (profileError) {
-    return jsonResponse({ error: "Unable to validate admin profile" }, 403);
+    return jsonResponse(request, { error: "Unable to validate admin profile" }, 403);
   }
 
   if (!profile || !allowedRoles.has(profile.role)) {
-    return jsonResponse({ error: "Insufficient permission" }, 403);
+    return jsonResponse(request, { error: "Insufficient permission" }, 403);
   }
 
   let body: { target?: string; resourceType?: string };
   try {
     body = await request.json();
   } catch {
-    return jsonResponse({ error: "Invalid JSON body" }, 400);
+    return jsonResponse(request, { error: "Invalid JSON body" }, 400);
   }
 
   const target = body.target || "media";
@@ -108,11 +122,11 @@ Deno.serve(async (request) => {
   const folder = allowedTargets[target];
 
   if (!folder) {
-    return jsonResponse({ error: "Invalid upload target" }, 400);
+    return jsonResponse(request, { error: "Invalid upload target" }, 400);
   }
 
   if (!allowedResourceTypes.has(resourceType)) {
-    return jsonResponse({ error: "Invalid resource type" }, 400);
+    return jsonResponse(request, { error: "Invalid resource type" }, 400);
   }
 
   const timestamp = Math.round(Date.now() / 1000);
@@ -127,7 +141,7 @@ Deno.serve(async (request) => {
 
   const signature = await buildCloudinarySignature(signatureParams, apiSecret);
 
-  return jsonResponse({
+  return jsonResponse(request, {
     timestamp,
     signature,
     cloudName,

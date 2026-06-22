@@ -6,7 +6,7 @@ import {
   updateDonorRecord,
   updatePatientRecord
 } from "./api.js";
-import { handleLogout, requireAuth } from "./auth.js";
+import { bindAuthStateRedirect, handleLogout, requireAuth } from "./auth.js";
 import { renderDonationChart, renderOverviewCharts, renderRegionCharts } from "./charts.js";
 import {
   createAction,
@@ -227,6 +227,7 @@ async function initApp() {
   state.session = await requireAuth();
   if (!state.session) return;
   state.adminProfile = state.session.adminProfile || null;
+  bindAuthStateRedirect();
 
   document.documentElement.classList.remove("auth-checking", "redirect-login");
   document.documentElement.classList.add("auth-ready");
@@ -994,7 +995,7 @@ function getContentDescription(row) {
 }
 
 function hasContentAsset(row) {
-  return Boolean(row.image_asset_id || row.media_asset_id || row.cloudinary_public_id || row.image_url || row.thumbnail_url);
+  return Boolean(row.image_asset_id || row.cloudinary_public_id || row.image_url || row.thumbnail_url);
 }
 
 function openContentFormModal(id = null) {
@@ -1268,7 +1269,7 @@ function attachUploadedAsset(payload, type, uploadResult) {
   const secureUrl = upload.secure_url;
 
   if (type === "media_items") {
-    payload.media_asset_id = mediaAsset.id;
+    payload.image_asset_id = mediaAsset.id;
     payload.url = secureUrl;
     payload.thumbnail_url = upload.thumbnail_url || secureUrl;
   } else {

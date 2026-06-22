@@ -8,6 +8,10 @@ export async function signOut() {
   return supabaseClient.auth.signOut();
 }
 
+export function onAuthStateChange(callback) {
+  return supabaseClient.auth.onAuthStateChange(callback);
+}
+
 export async function getSession() {
   const { data, error } = await supabaseClient.auth.getSession();
   if (error) {

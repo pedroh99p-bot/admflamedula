@@ -22,7 +22,7 @@ create table if not exists public.media_assets (
 
 alter table public.hero_news add column if not exists image_asset_id uuid references public.media_assets(id) on delete set null;
 alter table public.actions add column if not exists image_asset_id uuid references public.media_assets(id) on delete set null;
-alter table public.media_items add column if not exists media_asset_id uuid references public.media_assets(id) on delete set null;
+alter table public.media_items add column if not exists image_asset_id uuid references public.media_assets(id) on delete set null;
 alter table public.testimonials add column if not exists image_asset_id uuid references public.media_assets(id) on delete set null;
 alter table public.team_members add column if not exists image_asset_id uuid references public.media_assets(id) on delete set null;
 

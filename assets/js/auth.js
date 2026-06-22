@@ -1,6 +1,7 @@
 import {
   getCurrentAdminProfile,
   getSession as getSupabaseSession,
+  onAuthStateChange,
   requireActiveAdminProfile,
   signIn,
   signOut
@@ -40,6 +41,15 @@ export async function handleLogout() {
     console.error("[Supabase Auth] signOut", error);
   }
   window.location.replace("./login.html");
+}
+
+export function bindAuthStateRedirect() {
+  return onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT" && !location.pathname.endsWith("/login.html")) {
+      clearRoleCache();
+      window.location.replace("./login.html");
+    }
+  });
 }
 
 function setLoginError(message = "") {

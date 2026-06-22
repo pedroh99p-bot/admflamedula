@@ -1,0 +1,2 @@
+[functions.generate-cloudinary-signature]
+verify_jwt = true
