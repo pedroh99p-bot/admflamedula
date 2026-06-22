@@ -42,7 +42,7 @@ import {
   updateTestimonial,
   updateTransparencyMetric
 } from "./services/contentService.js";
-import { uploadSignedMediaAsset } from "./services/cloudinaryService.js";
+import { getMediaAssetPreviewUrl, getMediaAssetThumbnailUrl, uploadSignedMediaAsset } from "./services/cloudinaryService.js";
 import { demoDonations, demoDonors, demoPatients } from "./demo-data.js";
 import { showToast } from "./toast.js";
 import {
@@ -919,7 +919,7 @@ function renderContent() {
 function renderContentCard(row) {
   const title = getContentTitle(row);
   const description = getContentDescription(row);
-  const image = row.image_url || row.thumbnail_url || row.url || "";
+  const image = row.card_url || row.webp_url || row.delivery_url || row.image_url || row.thumbnail_url || row.url || row.secure_url || "";
   const canPublish = Object.prototype.hasOwnProperty.call(row, "published");
   const canFeature = Object.prototype.hasOwnProperty.call(row, "featured");
   const canMutate = canMutateCurrentContentType();
@@ -1061,7 +1061,7 @@ function buildContentFormMarkup(record, submitting) {
 }
 
 function buildContentAssetPreview(record) {
-  const url = record.image_url || record.thumbnail_url || record.url || "";
+  const url = record.card_url || record.webp_url || record.delivery_url || record.image_url || record.thumbnail_url || record.url || record.secure_url || "";
   if (!url) return "";
 
   return `
@@ -1270,11 +1270,11 @@ function attachUploadedAsset(payload, type, uploadResult) {
 
   if (type === "media_items") {
     payload.image_asset_id = mediaAsset.id;
-    payload.url = secureUrl;
-    payload.thumbnail_url = upload.thumbnail_url || secureUrl;
+    payload.url = getMediaAssetPreviewUrl(mediaAsset) || secureUrl;
+    payload.thumbnail_url = getMediaAssetThumbnailUrl(mediaAsset) || upload.thumbnail_url || secureUrl;
   } else {
     payload.image_asset_id = mediaAsset.id;
-    payload.image_url = secureUrl;
+    payload.image_url = getMediaAssetPreviewUrl(mediaAsset) || secureUrl;
   }
 
   payload.cloudinary_public_id = upload.public_id;

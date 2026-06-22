@@ -58,7 +58,7 @@ Configure estes segredos somente no ambiente da Function:
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
 - `CLOUDINARY_UPLOAD_PRESET`
-- `CLOUDINARY_ASSET_FOLDER`
+- `CLOUDINARY_ASSET_FOLDER=flamedula/site`
 - `ALLOWED_ORIGINS`
 
 ## Cartao/pagamento

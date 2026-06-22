@@ -1,12 +1,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const allowedTargets: Record<string, string> = {
-  hero: "flamedula/adm/hero",
-  actions: "flamedula/adm/actions",
-  media: "flamedula/adm/media",
-  team: "flamedula/adm/team",
-  testimonials: "flamedula/adm/testimonials"
+  hero: "flamedula/site/hero",
+  actions: "flamedula/site/actions",
+  media: "flamedula/site/media",
+  team: "flamedula/site/team",
+  testimonials: "flamedula/site/testimonials",
+  branding: "flamedula/site/branding"
 };
+
+const imageEagerTransformations = [
+  "f_webp,q_auto:good,c_limit,w_1920",
+  "f_webp,q_auto:good,c_fill,g_auto,w_900,h_600",
+  "f_webp,q_auto:eco,c_fill,g_auto,w_480,h_320"
+].join("|");
 
 const allowedResourceTypes = new Set(["image", "video"]);
 const allowedRoles = new Set(["super_admin", "admin", "operator"]);
@@ -71,11 +78,11 @@ Deno.serve(async (request) => {
   const cloudName = Deno.env.get("CLOUDINARY_CLOUD_NAME");
   const apiKey = Deno.env.get("CLOUDINARY_API_KEY");
   const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
-  const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET");
+  const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET") || null;
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabasePublishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
 
-  if (!cloudName || !apiKey || !apiSecret || !uploadPreset || !supabaseUrl || !supabasePublishableKey) {
+  if (!cloudName || !apiKey || !apiSecret || !supabaseUrl || !supabasePublishableKey) {
     return jsonResponse(request, { error: "Edge Function secrets are not configured" }, 500);
   }
 
@@ -130,6 +137,9 @@ Deno.serve(async (request) => {
   }
 
   const timestamp = Math.round(Date.now() / 1000);
+  const isImage = resourceType === "image";
+  const eager = isImage ? imageEagerTransformations : null;
+  const eagerAsync = isImage ? false : null;
   const signatureParams: Record<string, string | number> = {
     folder,
     timestamp
@@ -139,15 +149,24 @@ Deno.serve(async (request) => {
     signatureParams.upload_preset = uploadPreset;
   }
 
+  if (eager) {
+    signatureParams.eager = eager;
+    signatureParams.eager_async = "false";
+  }
+
   const signature = await buildCloudinarySignature(signatureParams, apiSecret);
 
   return jsonResponse(request, {
+    success: true,
     timestamp,
     signature,
     cloudName,
     apiKey,
     uploadPreset,
     folder,
-    resourceType
+    resourceType,
+    target,
+    eager,
+    eagerAsync
   });
 });
