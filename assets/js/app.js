@@ -8,41 +8,7 @@ import {
 } from "./api.js";
 import { bindAuthStateRedirect, handleLogout, requireAuth } from "./auth.js";
 import { renderDonationChart, renderOverviewCharts, renderRegionCharts } from "./charts.js";
-import {
-  createAction,
-  createFaqItem,
-  createHeroNews,
-  createMediaItem,
-  createSiteSetting,
-  createTeamMember,
-  createTestimonial,
-  createTransparencyMetric,
-  deleteAction,
-  deleteFaqItem,
-  deleteHeroNews,
-  deleteMediaItem,
-  deleteSiteSetting,
-  deleteTeamMember,
-  deleteTestimonial,
-  deleteTransparencyMetric,
-  listActions,
-  listFaqItems,
-  listHeroNews,
-  listMediaItems,
-  listSiteSettings,
-  listTeamMembers,
-  listTestimonials,
-  listTransparencyMetrics,
-  updateAction,
-  updateFaqItem,
-  updateHeroNews,
-  updateMediaItem,
-  updateSiteSetting,
-  updateTeamMember,
-  updateTestimonial,
-  updateTransparencyMetric
-} from "./services/contentService.js";
-import { getMediaAssetPreviewUrl, getMediaAssetThumbnailUrl, uploadSignedMediaAsset } from "./services/cloudinaryService.js";
+import { activateContentModule, initContentModule } from "./content/contentModule.js";
 import { demoDonations, demoDonors, demoPatients } from "./demo-data.js";
 import { showToast } from "./toast.js";
 import {
@@ -81,69 +47,6 @@ const bloodCompatibility = {
 const bloodTypes = ["O-", "O+", "A-", "A+", "B-", "B+", "AB-", "AB+"];
 const donorStatuses = ["novo", "contatado", "acionavel", "aguardando_retorno", "arquivado"];
 const patientStatuses = ["novo", "em_analise", "aguardando_informacao", "mobilizacao_ativa", "encerrado", "arquivado"];
-const contentServices = {
-  hero_news: {
-    label: "Hero/news",
-    uploadTarget: "hero",
-    list: listHeroNews,
-    create: createHeroNews,
-    update: updateHeroNews,
-    delete: deleteHeroNews
-  },
-  actions: {
-    label: "Acoes",
-    uploadTarget: "actions",
-    list: listActions,
-    create: createAction,
-    update: updateAction,
-    delete: deleteAction
-  },
-  media_items: {
-    label: "Midias",
-    uploadTarget: "media",
-    list: listMediaItems,
-    create: createMediaItem,
-    update: updateMediaItem,
-    delete: deleteMediaItem
-  },
-  testimonials: {
-    label: "Depoimentos",
-    uploadTarget: "testimonials",
-    list: listTestimonials,
-    create: createTestimonial,
-    update: updateTestimonial,
-    delete: deleteTestimonial
-  },
-  team_members: {
-    label: "Equipe",
-    uploadTarget: "team",
-    list: listTeamMembers,
-    create: createTeamMember,
-    update: updateTeamMember,
-    delete: deleteTeamMember
-  },
-  faq_items: {
-    label: "FAQ",
-    list: listFaqItems,
-    create: createFaqItem,
-    update: updateFaqItem,
-    delete: deleteFaqItem
-  },
-  transparency_metrics: {
-    label: "Transparencia",
-    list: listTransparencyMetrics,
-    create: createTransparencyMetric,
-    update: updateTransparencyMetric,
-    delete: deleteTransparencyMetric
-  },
-  site_settings: {
-    label: "Configuracoes do site",
-    list: listSiteSettings,
-    create: createSiteSetting,
-    update: updateSiteSetting,
-    delete: deleteSiteSetting
-  }
-};
 
 const state = {
   activeTab: "overview",
@@ -170,12 +73,6 @@ const state = {
   dashboardMetrics: [],
   regionSummary: [],
   contentSummary: [],
-  contentType: "hero_news",
-  contentRows: [],
-  contentLoading: false,
-  contentError: "",
-  contentFormContext: null,
-  modalReturnFocus: null,
   dataErrors: [],
   matchingContext: null,
   formContext: null,
@@ -236,6 +133,10 @@ async function initApp() {
   applySavedTheme();
   applySavedDemoMode();
   bindEvents();
+  initContentModule({
+    root: document.getElementById("contentModuleRoot"),
+    getAdminRole
+  });
   await loadDashboardData();
   setActiveTab(location.hash.replace("#", "") || "overview", false);
 }
@@ -299,10 +200,6 @@ function bindEvents() {
   bindFilter("reportPeriodFilter", "reportFilters", "periodo");
   bindFilter("reportStateFilter", "reportFilters", "estado");
   bindFilter("reportBloodFilter", "reportFilters", "tipo_sanguineo");
-  document.getElementById("contentTypeFilter")?.addEventListener("change", async (event) => {
-    state.contentType = event.target.value;
-    await loadContentRows();
-  });
 
   document.getElementById("btnClearDonorFilters")?.addEventListener("click", () => {
     state.donorFilters = {
@@ -329,7 +226,6 @@ function bindEvents() {
 
   document.addEventListener("click", handleClickActions);
   document.addEventListener("submit", handleEntityFormSubmit);
-  document.addEventListener("submit", handleContentFormSubmit);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeModal();
   });
@@ -382,8 +278,8 @@ function setActiveTab(tab, updateHash = true) {
     history.replaceState(null, "", `#${target}`);
   }
 
-  if (target === "content" && !state.contentRows.length && !state.contentLoading) {
-    loadContentRows();
+  if (target === "content") {
+    activateContentModule();
   }
 
   closeSidebar();
@@ -399,7 +295,6 @@ function renderAll() {
   renderPatients();
   renderDonations();
   renderRegions();
-  renderContent();
   renderReports();
   renderActiveCharts();
 
@@ -413,8 +308,6 @@ function renderAll() {
     if (state.matchingContext) {
       renderMatchingModal();
     }
-  } else if (state.contentFormContext) {
-    renderContentFormModal();
   }
 
   createIcons();
@@ -810,18 +703,6 @@ function getAdminRole() {
   return state.adminProfile?.role || "viewer";
 }
 
-function canMutateContent() {
-  return ["super_admin", "admin", "operator"].includes(getAdminRole());
-}
-
-function canDeleteContent() {
-  return ["super_admin", "admin"].includes(getAdminRole());
-}
-
-function canEditSiteSettings() {
-  return ["super_admin", "admin"].includes(getAdminRole());
-}
-
 function getSupporterLevel(points) {
   if (points >= 500) return { label: "Embaixador", reward: "Camisa + bone + destaque especial", className: "positive" };
   if (points >= 300) return { label: "Ouro", reward: "Camisa Flamedula", className: "warning" };
@@ -841,523 +722,6 @@ function renderRegions() {
   renderRanking("cityRanking", regionEntries.slice(0, 6));
   renderRanking("patientStateRanking", sortEntriesByValue(countBy(patients, "estado"), 6));
   renderRanking("bloodDemandRanking", sortEntriesByValue(countBy(patients, "tipo_sanguineo"), 8));
-}
-
-async function loadContentRows() {
-  const service = contentServices[state.contentType];
-  if (!service) return;
-
-  state.contentLoading = true;
-  state.contentError = "";
-  renderContent();
-
-  try {
-    const result = await service.list();
-    state.contentRows = result.data || [];
-    state.contentError = result.error?.message || "";
-  } catch (error) {
-    console.error("[Content] loadContentRows", error);
-    state.contentRows = [];
-    state.contentError = error.message || "Nao foi possivel carregar conteudo.";
-  } finally {
-    state.contentLoading = false;
-    renderContent();
-    createIcons();
-  }
-}
-
-function renderContent() {
-  const typeField = document.getElementById("contentTypeFilter");
-  if (typeField && typeField.value !== state.contentType) {
-    typeField.value = state.contentType;
-  }
-
-  const createButton = document.getElementById("btnCreateContent");
-  if (createButton) {
-    createButton.dataset.contentType = state.contentType;
-    createButton.disabled = false;
-  }
-
-  const rows = state.contentRows;
-  const published = rows.filter((row) => row.published === true).length;
-  const featured = rows.filter((row) => row.featured === true).length;
-
-  renderMetrics("contentMetrics", [
-    { label: "Registros", value: rows.length, detail: getContentTypeLabel(state.contentType), icon: "database", tone: "blue", featured: true },
-    { label: "Publicados", value: published, detail: "published = true", icon: "eye", tone: "green" },
-    { label: "Destaques", value: featured, detail: "featured = true", icon: "star", tone: "yellow" },
-    { label: "Assets", value: rows.filter(hasContentAsset).length, detail: "Cloudinary vinculado", icon: "image", tone: "red" }
-  ]);
-
-  const list = document.getElementById("contentList");
-  if (!list) return;
-
-  if (state.contentLoading) {
-    list.innerHTML = emptyListState("Carregando conteudo...");
-    return;
-  }
-
-  if (state.contentError) {
-    list.innerHTML = `
-      <div class="empty-list-state">
-        ${escapeHtml(state.contentError)}
-        <button class="action-button secondary retry-button" type="button" data-content-retry>
-          <i data-lucide="refresh-cw"></i>
-          <span>Tentar novamente</span>
-        </button>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = rows
-    .slice()
-    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0))
-    .map(renderContentCard)
-    .join("") || emptyListState("Nenhum registro de conteudo encontrado.");
-}
-
-function renderContentCard(row) {
-  const title = getContentTitle(row);
-  const description = getContentDescription(row);
-  const image = row.card_url || row.webp_url || row.delivery_url || row.image_url || row.thumbnail_url || row.url || row.secure_url || "";
-  const canPublish = Object.prototype.hasOwnProperty.call(row, "published");
-  const canFeature = Object.prototype.hasOwnProperty.call(row, "featured");
-  const canMutate = canMutateCurrentContentType();
-  const canDelete = canDeleteContent();
-
-  return `
-    <article class="record-card content-card">
-      ${image ? `<img class="content-thumb" src="${escapeHtml(image)}" alt="${escapeHtml(row.image_alt || title)}">` : ""}
-      <div class="record-main">
-        <div class="record-title-row">
-          <div>
-            <strong>${escapeHtml(title)}</strong>
-            <small>${escapeHtml(description || getContentTypeLabel(state.contentType))}</small>
-          </div>
-          <span class="badge info">${escapeHtml(getContentTypeLabel(state.contentType))}</span>
-        </div>
-        <div class="record-meta">
-          <span><i data-lucide="calendar"></i>${formatDate(row.updated_at || row.created_at)}</span>
-          <span><i data-lucide="arrow-up-down"></i>Ordem ${escapeHtml(row.sort_order ?? "-")}</span>
-          ${row.cloudinary_public_id ? `<span><i data-lucide="cloud"></i>${escapeHtml(row.cloudinary_public_id)}</span>` : ""}
-        </div>
-        <div class="record-badges">
-          ${canPublish ? `<span class="badge ${row.published ? "positive" : "warning"}">${row.published ? "Publicado" : "Rascunho"}</span>` : ""}
-          ${canFeature ? `<span class="badge ${row.featured ? "positive" : "info"}">${row.featured ? "Destaque" : "Sem destaque"}</span>` : ""}
-        </div>
-      </div>
-      <div class="record-actions">
-        ${canPublish && canMutate ? `<button class="action-button secondary" type="button" data-toggle-content="published" data-id="${escapeHtml(row.id)}">
-          <i data-lucide="${row.published ? "eye-off" : "eye"}"></i>
-          <span>${row.published ? "Despublicar" : "Publicar"}</span>
-        </button>` : ""}
-        <button class="action-button ghost" type="button" data-edit-content="${escapeHtml(row.id)}" ${canMutate ? "" : "disabled"}>
-          <i data-lucide="pencil"></i>
-          <span>Editar</span>
-        </button>
-        <button class="action-button ghost danger-text" type="button" data-delete-content="${escapeHtml(row.id)}" data-name="${escapeHtml(title)}" ${canDelete ? "" : "disabled"}>
-          <i data-lucide="trash-2"></i>
-          <span>Excluir</span>
-        </button>
-      </div>
-    </article>
-  `;
-}
-
-function canMutateCurrentContentType() {
-  if (state.contentType === "site_settings") return canEditSiteSettings();
-  return canMutateContent();
-}
-
-function getContentTypeLabel(type) {
-  return contentServices[type]?.label || type;
-}
-
-function getContentTitle(row) {
-  return row.title
-    || row.name
-    || row.question
-    || row.label
-    || row.key
-    || row.author_name
-    || "Registro";
-}
-
-function getContentDescription(row) {
-  return row.subtitle
-    || row.summary
-    || row.description
-    || row.answer
-    || row.quote
-    || row.role
-    || row.category
-    || "";
-}
-
-function hasContentAsset(row) {
-  return Boolean(row.image_asset_id || row.cloudinary_public_id || row.image_url || row.thumbnail_url);
-}
-
-function openContentFormModal(id = null, options = {}) {
-  const requestedType = options.contentType || state.contentType;
-  if (requestedType && contentServices[requestedType]) {
-    state.contentType = requestedType;
-    const typeField = document.getElementById("contentTypeFilter");
-    if (typeField) typeField.value = requestedType;
-  } else if (requestedType) {
-    console.error("[Content] Tipo de conteudo invalido", requestedType);
-    showToast("Tipo de conteudo invalido.", "error");
-    return;
-  }
-
-  if (!canMutateCurrentContentType()) {
-    showToast("Seu perfil nao tem permissao para editar este conteudo.", "error");
-    return;
-  }
-
-  const record = id ? findRecordById(state.contentRows, id) : null;
-  if (id && !record) {
-    console.error("[Content] Registro nao encontrado para edicao", id);
-    showToast("Registro de conteudo nao encontrado.", "error");
-    return;
-  }
-
-  state.formContext = null;
-  state.matchingContext = null;
-  state.modalReturnFocus = options.returnFocus || document.activeElement;
-  state.contentFormContext = {
-    id: id ? String(id) : null,
-    record,
-    mode: id ? "edit" : "create",
-    submitting: false
-  };
-  renderContentFormModal();
-}
-
-function renderContentFormModal() {
-  if (!state.contentFormContext) return;
-  const { record, submitting } = state.contentFormContext;
-  const typeLabel = getContentTypeLabel(state.contentType);
-
-  openModal({
-    kicker: typeLabel,
-    title: record ? `Editar ${getContentTitle(record)}` : `Novo conteudo`,
-    bodyMarkup: buildContentFormMarkup(record || {}, submitting),
-    modalClass: "form-modal content-form-modal",
-    bodyClass: "form-body"
-  });
-}
-
-function buildContentFormMarkup(record, submitting) {
-  const fields = getContentFieldMarkup(state.contentType, record);
-  const supportsUpload = Boolean(contentServices[state.contentType]?.uploadTarget);
-
-  return `
-    <form id="contentForm" class="entity-form" data-content-type="${escapeHtml(state.contentType)}">
-      <div class="form-grid">
-        ${fields}
-        ${renderNumberField("Ordem", "sort_order", record.sort_order ?? 0, -999, 9999, 1)}
-        ${Object.prototype.hasOwnProperty.call(record, "published") || state.contentType !== "site_settings" ? renderBooleanField("Publicado", "published", record.published === true) : ""}
-        ${["hero_news", "actions", "media_items"].includes(state.contentType) ? renderBooleanField("Destaque", "featured", record.featured === true) : ""}
-      </div>
-      ${supportsUpload ? `
-        ${buildContentAssetPreview(record)}
-        <label class="field field-span-2">
-          <span>Arquivo Cloudinary</span>
-          <input type="file" name="asset_file" accept="image/*,video/*">
-        </label>
-        <p class="form-hint">O arquivo e enviado com assinatura da Edge Function generate-cloudinary-signature.</p>
-      ` : ""}
-      <div class="form-actions">
-        <button class="action-button ghost" type="button" id="btnCancelEntityForm">Cancelar</button>
-        <button class="action-button primary" type="submit" ${submitting ? "disabled" : ""}>
-          <i data-lucide="${submitting ? "loader-circle" : "save"}"></i>
-          <span>${submitting ? "Salvando..." : "Salvar conteudo"}</span>
-        </button>
-      </div>
-    </form>
-  `;
-}
-
-function buildContentAssetPreview(record) {
-  const url = record.card_url || record.webp_url || record.delivery_url || record.image_url || record.thumbnail_url || record.url || record.secure_url || "";
-  if (!url) return "";
-
-  return `
-    <div class="asset-preview field-span-2">
-      <span>Asset atual</span>
-      <img src="${escapeHtml(url)}" alt="${escapeHtml(record.image_alt || getContentTitle(record))}">
-    </div>
-  `;
-}
-
-function getContentFieldMarkup(type, record) {
-  const commonImageFields = `
-    ${renderTextField("URL da imagem", "image_url", record.image_url)}
-    ${renderTextField("Texto alternativo", "image_alt", record.image_alt)}
-    ${renderTextField("Cloudinary public ID", "cloudinary_public_id", record.cloudinary_public_id)}
-  `;
-
-  if (type === "hero_news") {
-    return `
-      ${renderTextField("Titulo", "title", record.title)}
-      ${renderTextField("Categoria", "category", record.category)}
-      ${renderTextareaField("Subtitulo", "subtitle", record.subtitle)}
-      ${commonImageFields}
-      ${renderTextField("CTA label", "cta_label", record.cta_label)}
-      ${renderTextField("CTA URL", "cta_url", record.cta_url)}
-    `;
-  }
-
-  if (type === "actions") {
-    return `
-      ${renderTextField("Titulo", "title", record.title)}
-      ${renderTextField("Local", "location", record.location)}
-      ${renderTextField("Data", "action_date", record.action_date, "date")}
-      ${renderTextField("Status da acao", "action_status", record.action_status)}
-      ${renderTextareaField("Resumo", "summary", record.summary)}
-      ${commonImageFields}
-      ${renderTextField("CTA label", "cta_label", record.cta_label)}
-      ${renderTextField("CTA URL", "cta_url", record.cta_url)}
-    `;
-  }
-
-  if (type === "media_items") {
-    return `
-      ${renderTextField("Titulo", "title", record.title)}
-      ${renderTextField("Tipo", "type", record.type)}
-      ${renderTextField("Categoria", "category", record.category)}
-      ${renderTextField("URL", "url", record.url)}
-      ${renderTextField("Youtube ID", "youtube_id", record.youtube_id)}
-      ${renderTextField("Thumbnail URL", "thumbnail_url", record.thumbnail_url)}
-      ${renderTextField("Cloudinary public ID", "cloudinary_public_id", record.cloudinary_public_id)}
-      ${renderTextField("Duracao", "duration", record.duration)}
-      ${renderTextField("Fonte", "source", record.source)}
-      ${renderTextareaField("Descricao", "description", record.description)}
-    `;
-  }
-
-  if (type === "testimonials") {
-    return `
-      ${renderTextField("Autor", "author_name", record.author_name)}
-      ${renderTextField("Rotulo do autor", "author_label", record.author_label)}
-      ${renderTextareaField("Depoimento", "quote", record.quote)}
-      ${commonImageFields}
-    `;
-  }
-
-  if (type === "team_members") {
-    return `
-      ${renderTextField("Nome", "name", record.name)}
-      ${renderTextField("Papel", "role", record.role)}
-      ${renderTextField("Tipo", "member_type", record.member_type)}
-      ${renderTextareaField("Descricao", "description", record.description)}
-      ${commonImageFields}
-    `;
-  }
-
-  if (type === "faq_items") {
-    return `
-      ${renderTextField("Pergunta", "question", record.question)}
-      ${renderTextField("Categoria", "category", record.category)}
-      ${renderTextareaField("Resposta", "answer", record.answer)}
-    `;
-  }
-
-  if (type === "transparency_metrics") {
-    return `
-      ${renderTextField("Chave", "key", record.key)}
-      ${renderTextField("Label", "label", record.label)}
-      ${renderNumberField("Valor", "value", record.value, -999999999, 999999999, 0.01)}
-      ${renderTextField("Modo", "mode", record.mode)}
-      ${renderTextareaField("Descricao", "description", record.description)}
-    `;
-  }
-
-  return `
-    ${renderTextField("Chave", "key", record.key)}
-    ${renderTextareaField("JSON", "value_json", JSON.stringify(record.value_json || {}, null, 2))}
-    ${renderTextareaField("Descricao", "description", record.description)}
-  `;
-}
-
-async function handleContentFormSubmit(event) {
-  if (event.target.id !== "contentForm" || !state.contentFormContext) return;
-  event.preventDefault();
-
-  if (!canMutateCurrentContentType()) {
-    showToast("Seu perfil nao tem permissao para salvar este conteudo.", "error");
-    return;
-  }
-
-  const service = contentServices[state.contentType];
-  if (!service) return;
-
-  const form = event.target;
-  const formData = new FormData(form);
-  const id = state.contentFormContext.id;
-
-  state.contentFormContext = {
-    ...state.contentFormContext,
-    submitting: true
-  };
-  renderContentFormModal();
-
-  try {
-    const payload = await buildContentPayload(state.contentType, formData);
-    const file = formData.get("asset_file");
-    if (file?.size && service.uploadTarget) {
-      const uploadResult = await uploadSignedMediaAsset({
-        file,
-        target: service.uploadTarget,
-        resourceType: file.type?.startsWith("video/") ? "video" : "image",
-        title: payload.title || payload.name || payload.key || payload.question || file.name,
-        displayName: payload.title || payload.name || payload.key || payload.question || file.name,
-        altText: payload.image_alt || payload.title || payload.name || "",
-        assetType: state.contentType
-      });
-      attachUploadedAsset(payload, state.contentType, uploadResult);
-    }
-
-    if (id) {
-      await service.update(id, payload);
-      showToast("Conteudo atualizado com sucesso.");
-    } else {
-      await service.create(payload);
-      showToast("Conteudo criado com sucesso.");
-    }
-
-    state.contentFormContext = null;
-    closeModal();
-    await loadContentRows();
-    await loadDashboardData();
-  } catch (error) {
-    console.error("[Content] handleContentFormSubmit", error);
-    state.contentFormContext = {
-      ...state.contentFormContext,
-      submitting: false
-    };
-    renderContentFormModal();
-    showToast(error.message || "Nao foi possivel salvar conteudo.", "error");
-  }
-}
-
-async function buildContentPayload(type, formData) {
-  const payload = {};
-  const stringFields = {
-    hero_news: ["category", "title", "subtitle", "image_url", "image_alt", "cloudinary_public_id", "cta_label", "cta_url"],
-    actions: ["title", "summary", "action_date", "location", "image_url", "image_alt", "cloudinary_public_id", "cta_label", "cta_url", "action_status"],
-    media_items: ["type", "category", "title", "description", "url", "youtube_id", "thumbnail_url", "cloudinary_public_id", "duration", "source"],
-    testimonials: ["quote", "author_name", "author_label", "image_url", "image_alt", "cloudinary_public_id"],
-    team_members: ["name", "role", "description", "member_type", "image_url", "image_alt", "cloudinary_public_id"],
-    faq_items: ["question", "answer", "category"],
-    transparency_metrics: ["key", "label", "description", "mode"],
-    site_settings: ["key", "description"]
-  }[type] || [];
-
-  stringFields.forEach((field) => {
-    payload[field] = getNullableStringValue(formData, field);
-  });
-
-  if (["hero_news", "actions", "media_items", "testimonials", "team_members", "faq_items", "transparency_metrics"].includes(type)) {
-    payload.published = getBooleanValue(formData, "published");
-  }
-
-  if (["hero_news", "actions", "media_items"].includes(type)) {
-    payload.featured = getBooleanValue(formData, "featured");
-  }
-
-  if (type !== "site_settings") {
-    payload.sort_order = getNumberValue(formData, "sort_order") || 0;
-  }
-
-  if (type === "transparency_metrics") {
-    payload.value = getNumberValue(formData, "value");
-  }
-
-  if (type === "site_settings") {
-    payload.value_json = parseJsonField(formData.get("value_json"));
-  }
-
-  return pruneUndefinedPayload(payload);
-}
-
-function attachUploadedAsset(payload, type, uploadResult) {
-  const upload = uploadResult.upload;
-  const mediaAsset = uploadResult.mediaAsset;
-  const secureUrl = upload.secure_url;
-
-  if (type === "media_items") {
-    payload.image_asset_id = mediaAsset.id;
-    payload.url = getMediaAssetPreviewUrl(mediaAsset) || secureUrl;
-    payload.thumbnail_url = getMediaAssetThumbnailUrl(mediaAsset) || upload.thumbnail_url || secureUrl;
-  } else {
-    payload.image_asset_id = mediaAsset.id;
-    payload.image_url = getMediaAssetPreviewUrl(mediaAsset) || secureUrl;
-  }
-
-  payload.cloudinary_public_id = upload.public_id;
-}
-
-function parseJsonField(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    throw new Error("JSON invalido em configuracoes do site.");
-  }
-}
-
-function pruneUndefinedPayload(payload) {
-  Object.keys(payload).forEach((key) => {
-    if (payload[key] === undefined) delete payload[key];
-  });
-  return payload;
-}
-
-async function toggleContentPublished(id) {
-  if (!canMutateCurrentContentType()) {
-    showToast("Seu perfil nao tem permissao para publicar este conteudo.", "error");
-    return;
-  }
-
-  const service = contentServices[state.contentType];
-  const record = findRecordById(state.contentRows, id);
-  if (!service || !record) return;
-
-  try {
-    await service.update(id, { published: !record.published });
-    await loadContentRows();
-    await loadDashboardData();
-    showToast(record.published ? "Conteudo despublicado." : "Conteudo publicado.");
-  } catch (error) {
-    console.error("[Content] toggleContentPublished", error);
-    showToast(error.message || "Nao foi possivel alterar publicacao.", "error");
-  }
-}
-
-async function deleteContentRecord(id, name) {
-  if (!canDeleteContent()) {
-    showToast("Seu perfil nao tem permissao para excluir conteudo.", "error");
-    return;
-  }
-
-  const service = contentServices[state.contentType];
-  if (!service) return;
-  if (!window.confirm(`Excluir conteudo ${name || "selecionado"}?`)) return;
-
-  try {
-    await service.delete(id);
-    await loadContentRows();
-    await loadDashboardData();
-    closeModal();
-    showToast("Conteudo excluido com sucesso.");
-  } catch (error) {
-    console.error("[Content] deleteContentRecord", error);
-    showToast(error.message || "Nao foi possivel excluir conteudo.", "error");
-  }
 }
 
 function renderReports() {
@@ -1564,42 +928,6 @@ function renderActiveCharts() {
 }
 
 function handleClickActions(event) {
-  const newContentButton = event.target.closest("[data-action='new-content']");
-  if (newContentButton) {
-    event.preventDefault();
-    openContentFormModal(null, {
-      contentType: newContentButton.dataset.contentType,
-      returnFocus: newContentButton
-    });
-    return;
-  }
-
-  const editContentButton = event.target.closest("[data-edit-content]");
-  if (editContentButton) {
-    openContentFormModal(editContentButton.dataset.editContent, {
-      returnFocus: editContentButton
-    });
-    return;
-  }
-
-  const deleteContentButton = event.target.closest("[data-delete-content]");
-  if (deleteContentButton) {
-    deleteContentRecord(deleteContentButton.dataset.deleteContent, deleteContentButton.dataset.name);
-    return;
-  }
-
-  const toggleContentButton = event.target.closest("[data-toggle-content]");
-  if (toggleContentButton) {
-    toggleContentPublished(toggleContentButton.dataset.id);
-    return;
-  }
-
-  const retryContentButton = event.target.closest("[data-content-retry]");
-  if (retryContentButton) {
-    loadContentRows();
-    return;
-  }
-
   const deleteButton = event.target.closest("[data-delete-entity]");
   if (deleteButton) {
     handleDeleteEntity(deleteButton.dataset.deleteEntity, deleteButton.dataset.id, deleteButton.dataset.name);
@@ -2472,7 +1800,7 @@ function exportActiveTab() {
     patients: () => exportPatientsCsv(getGlobalPatients(), "flamedula_pacientes.csv"),
     donations: () => exportDonationsCsv(getFilteredDonations(), "flamedula_doacoes.csv"),
     regions: () => exportDonorsCsv(getGlobalDonors(), "flamedula_regioes.csv"),
-    content: () => exportContentCsv(state.contentRows, `flamedula_conteudo_${state.contentType}.csv`),
+    content: () => showToast("Use os filtros da aba Conteudo para revisar os registros.", "error"),
     reports: exportReportCsv,
     settings: () => showToast("Nao ha dados para exportar", "error")
   };
@@ -2558,28 +1886,6 @@ function exportDonationsCsv(rows, filename) {
   ]), filename);
 
   showToast("CSV gerado com dados reais.");
-}
-
-function exportContentCsv(rows, filename) {
-  if (!rows.length) {
-    showToast("Nao ha dados para exportar", "error");
-    return;
-  }
-
-  downloadCSV(toCsv(rows, [
-    { label: "id", value: "id" },
-    { label: "tipo", value: () => state.contentType },
-    { label: "titulo", value: (row) => getContentTitle(row) },
-    { label: "descricao", value: (row) => getContentDescription(row) },
-    { label: "published", value: (row) => yesNo(row.published) },
-    { label: "featured", value: (row) => yesNo(row.featured) },
-    { label: "sort_order", value: "sort_order" },
-    { label: "cloudinary_public_id", value: "cloudinary_public_id" },
-    { label: "created_at", value: "created_at" },
-    { label: "updated_at", value: "updated_at" }
-  ]), filename);
-
-  showToast("CSV de conteudo gerado.");
 }
 
 function exportReportCsv() {
@@ -2810,11 +2116,8 @@ function openModal({ kicker, title, bodyMarkup, modalClass = "", bodyClass = "" 
 }
 
 function closeModal() {
-  const returnFocus = state.modalReturnFocus;
   state.matchingContext = null;
   state.formContext = null;
-  state.contentFormContext = null;
-  state.modalReturnFocus = null;
   state.isUpdatingMatch = false;
 
   const modal = document.getElementById("detailModal");
@@ -2824,9 +2127,6 @@ function closeModal() {
   document.body.classList.remove("modal-open");
   modalBody?.classList.remove("matching-body", "form-body");
   if (modalBody) modalBody.innerHTML = "";
-  if (returnFocus?.isConnected) {
-    requestAnimationFrame(() => returnFocus.focus());
-  }
 }
 
 function emptyRow(colspan, message) {

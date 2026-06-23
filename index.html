@@ -27,6 +27,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./assets/css/styles.css">
+  <link rel="stylesheet" href="./assets/css/content-module.css">
 </head>
 
 <body>
@@ -413,36 +414,8 @@
           </div>
         </section>
 
-        <section class="tab-panel" id="tab-content" data-title="Conteudo" data-kicker="Landing futura">
-          <div class="section-heading">
-            <div>
-              <h2>Conteudo publico</h2>
-              <p>CRUD administrativo para tabelas de conteudo e assets Cloudinary</p>
-            </div>
-            <button class="action-button primary content-new-button" type="button" id="btnCreateContent" data-action="new-content" data-content-type="hero_news">
-              <i data-lucide="plus"></i>
-              <span>Novo conteudo</span>
-            </button>
-          </div>
-
-          <div class="filters-grid content-filters-grid">
-            <label>
-              <span>Tipo de conteudo</span>
-              <select id="contentTypeFilter">
-                <option value="hero_news">Hero/news</option>
-                <option value="actions">Acoes</option>
-                <option value="media_items">Midias</option>
-                <option value="testimonials">Depoimentos</option>
-                <option value="team_members">Equipe</option>
-                <option value="faq_items">FAQ</option>
-                <option value="transparency_metrics">Transparencia</option>
-                <option value="site_settings">Configuracoes do site</option>
-              </select>
-            </label>
-          </div>
-
-          <div class="metrics-grid compact" id="contentMetrics"></div>
-          <div class="record-list content-list" id="contentList"></div>
+        <section class="tab-panel" id="tab-content" data-title="Conteudo" data-kicker="Gestao do site">
+          <div id="contentModuleRoot" class="content-module-root" aria-live="polite"></div>
         </section>
 
         <section class="tab-panel" id="tab-reports" data-title="Relatórios" data-kicker="Exportação e filtros">

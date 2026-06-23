@@ -1,19 +1,39 @@
 import { deleteRecord, fetchOne, fetchTable, insertRecord, updateRecord } from "./supabaseService.js";
 
-function listContent(tableName, filters = {}) {
-  return fetchTable(tableName, { filters, orderBy: "sort_order", ascending: true });
+export function listContent(tableName, filters = {}, options = {}) {
+  return fetchTable(tableName, {
+    filters,
+    orderBy: options.orderBy ?? "sort_order",
+    ascending: options.ascending ?? true
+  });
 }
 
-function createContent(tableName, payload) {
+export function getContentById(tableName, id) {
+  return fetchOne(tableName, id);
+}
+
+export function createContent(tableName, payload) {
   return insertRecord(tableName, payload, `Nao foi possivel criar registro em ${tableName}.`);
 }
 
-function updateContent(tableName, id, payload) {
+export function updateContent(tableName, id, payload) {
   return updateRecord(tableName, id, payload, `Nao foi possivel atualizar registro em ${tableName}.`);
 }
 
-function deleteContent(tableName, id) {
+export function deleteContent(tableName, id) {
   return deleteRecord(tableName, id, `Nao foi possivel excluir registro em ${tableName}.`);
+}
+
+export function publishContent(tableName, id) {
+  return updateContent(tableName, id, { published: true });
+}
+
+export function unpublishContent(tableName, id) {
+  return updateContent(tableName, id, { published: false });
+}
+
+export async function reorderContent(tableName, orderedIds) {
+  return Promise.all(orderedIds.map((id, index) => updateContent(tableName, id, { sort_order: index + 1 })));
 }
 
 export const listHeroNews = (filters) => listContent("hero_news", filters);
