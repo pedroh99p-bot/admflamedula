@@ -149,6 +149,25 @@ async function initApp() {
   applySavedDemoMode();
   bindEvents();
   await loadDashboardData();
+
+  // Verificar acesso CMS sob demanda
+  try {
+    const { checkCmsAccess } = await import("./publication/publicationPermissions.js");
+    const check = await checkCmsAccess();
+    if (check.active) {
+      const header = document.getElementById("sidebarPubHeader");
+      const tabHero = document.getElementById("navTabHero");
+      const tabActions = document.getElementById("navTabActions");
+      const tabMedia = document.getElementById("navTabMedia");
+      if (header) header.style.display = "block";
+      if (tabHero) tabHero.style.display = "flex";
+      if (tabActions) tabActions.style.display = "flex";
+      if (tabMedia) tabMedia.style.display = "flex";
+    }
+  } catch (err) {
+    console.error("Erro ao carregar permissões CMS", err);
+  }
+
   setActiveTab(location.hash.replace("#", "") || "overview", false);
 }
 
@@ -335,7 +354,16 @@ function setActiveTab(tab, updateHash = true) {
   }
 
   closeSidebar();
-  renderActiveCharts();
+
+  // Carregar e iniciar o módulo de publicação sob demanda
+  if (["hero", "actions", "media"].includes(target)) {
+    import("./publication/publicationRouter.js")
+      .then((mod) => mod.initPublicationRouter(target))
+      .catch((err) => console.error("Erro ao iniciar publicação", err));
+  } else {
+    renderActiveCharts();
+  }
+
   createIcons();
 }
 

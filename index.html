@@ -27,6 +27,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./assets/css/styles.css">
+  <link rel="stylesheet" href="./assets/css/publication.css">
 </head>
 
 <body>
@@ -61,6 +62,20 @@
         <button class="nav-item" type="button" data-tab="donations">
           <i data-lucide="heart"></i>
           <span>Apoie</span>
+        </button>
+
+        <div class="sidebar-header" id="sidebarPubHeader" style="display: none;">Publicação</div>
+        <button class="nav-item" type="button" data-tab="hero" id="navTabHero" style="display: none;">
+          <i data-lucide="panel-top"></i>
+          <span>Hero</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="actions" id="navTabActions" style="display: none;">
+          <i data-lucide="calendar-check"></i>
+          <span>Ações</span>
+        </button>
+        <button class="nav-item" type="button" data-tab="media" id="navTabMedia" style="display: none;">
+          <i data-lucide="image"></i>
+          <span>Mídia</span>
         </button>
 
         <div class="sidebar-header">Sistema</div>
@@ -349,6 +364,18 @@
             </div>
           </article>
           <div class="record-list" id="donationsList"></div>
+        </section>
+
+        <section class="tab-panel" id="tab-hero" data-title="Banner Principal" data-kicker="Publicação Hero">
+          <!-- Conteúdo gerado sob demanda via JavaScript -->
+        </section>
+
+        <section class="tab-panel" id="tab-actions" data-title="Ações Sociais" data-kicker="Publicação Ações">
+          <!-- Conteúdo gerado sob demanda via JavaScript -->
+        </section>
+
+        <section class="tab-panel" id="tab-media" data-title="Galeria e Mídias" data-kicker="Publicação Mídia">
+          <!-- Conteúdo gerado sob demanda via JavaScript -->
         </section>
 
         <section class="tab-panel" id="tab-audit" data-title="Auditoria administrativa" data-kicker="Logs de eventos do sistema">
