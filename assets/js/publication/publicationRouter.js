@@ -23,11 +23,6 @@ export async function initPublicationRouter(tabId) {
   publicationState.activeType = getContentTypeFromTab(tabId);
   publicationState.page = 1;
 
-  if (!initialized) {
-    bindEvents();
-    initialized = true;
-  }
-
   await loadItems();
 }
 
@@ -414,14 +409,13 @@ function buildFormFieldsMarkup(item) {
   `;
 }
 
-function bindEvents() {
-  document.addEventListener("submit", async (e) => {
-    if (e.target.id !== "editorialModalForm") return;
-    e.target.preventDefault();
+export function bindFormSubmitEvent() {
+  const form = document.getElementById("editorialModalForm");
+  if (!form) return;
 
-    const submitter = e.submitter;
-    const isPublish = submitter?.id === "btnSavePublish";
-
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const isPublish = e.submitter?.id === "btnSavePublish";
     await handleSaveForm(isPublish);
   });
 }

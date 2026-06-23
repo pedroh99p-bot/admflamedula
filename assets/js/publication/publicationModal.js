@@ -58,6 +58,11 @@ export function openPublicationModal({ title, kicker, bodyMarkup }) {
   document.getElementById("editorialModalKicker").textContent = kicker;
   document.getElementById("editorialModalBody").innerHTML = bodyMarkup;
 
+  // Import dinâmico e bind do evento submit
+  import("./publicationRouter.js")
+    .then((mod) => mod.bindFormSubmitEvent())
+    .catch((err) => console.error("Erro ao vincular submit", err));
+
   // Gerenciar estado dos botões de ação com base na permissão do usuário
   const isViewer = publicationState.role === "viewer";
   document.getElementById("btnSaveDraft").disabled = isViewer;
