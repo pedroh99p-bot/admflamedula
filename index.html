@@ -27,7 +27,6 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./assets/css/styles.css">
-  <link rel="stylesheet" href="./assets/css/content-module.css">
 </head>
 
 <body>
@@ -58,23 +57,23 @@
         </button>
         <button class="nav-item" type="button" data-tab="donations">
           <i data-lucide="dollar-sign"></i>
-          <span>Doações</span>
+          <span>Apoio financeiro</span>
         </button>
-        <button class="nav-item" type="button" data-tab="regions">
-          <i data-lucide="map-pin"></i>
-          <span>Regiões</span>
+        <button class="nav-item" type="button" data-tab="support">
+          <i data-lucide="phone"></i>
+          <span>Contatos de apoio</span>
         </button>
-        <button class="nav-item" type="button" data-tab="content">
-          <i data-lucide="panel-top"></i>
-          <span>Conteudo</span>
+        <button class="nav-item" type="button" data-tab="matching">
+          <i data-lucide="search-check"></i>
+          <span>Pareamento</span>
         </button>
-        <button class="nav-item" type="button" data-tab="reports">
+        <button class="nav-item" type="button" data-tab="audit">
           <i data-lucide="file-text"></i>
-          <span>Relatórios</span>
+          <span>Auditoria</span>
         </button>
-        <button class="nav-item" type="button" data-tab="settings">
-          <i data-lucide="settings"></i>
-          <span>Configurações</span>
+        <button class="nav-item" type="button" data-tab="cms">
+          <i data-lucide="external-link"></i>
+          <span>Gestão do site</span>
         </button>
       </nav>
 
@@ -140,6 +139,25 @@
           </div>
 
           <div class="metrics-grid" id="overviewMetrics"></div>
+
+          <article class="card span-2" id="cardRecentRegistrations" style="grid-column: span 2; margin-bottom: 24px;">
+            <div class="card-header" style="margin-bottom: 16px;">
+              <h3>Registros recentes</h3>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Nome</th>
+                    <th>Detalhes</th>
+                    <th>Data/Hora</th>
+                  </tr>
+                </thead>
+                <tbody id="recentRegistrationsTableBody"></tbody>
+              </table>
+            </div>
+          </article>
 
           <div class="charts-grid">
             <article class="card chart-card span-2">
@@ -359,165 +377,116 @@
           </div>
         </section>
 
-        <section class="tab-panel" id="tab-regions" data-title="Regiões" data-kicker="Distribuição estratégica">
+        <section class="tab-panel" id="tab-support" data-title="Contatos de apoio" data-kicker="Leads de suporte">
           <div class="section-heading">
             <div>
-              <h2>Mapa operacional</h2>
-              <p>Rankings por estado, cidade e demanda</p>
+              <h2>Contatos de apoio</h2>
+              <p id="supportResultCount">0 registros</p>
             </div>
           </div>
 
-          <div class="insight-grid">
-            <article class="card">
-              <div class="card-header">
-                <h3>Estados com mais doadores</h3>
-              </div>
-              <ol class="ranking-list" id="stateRanking"></ol>
-            </article>
-            <article class="card">
-              <div class="card-header">
-                <h3>Cidades com mais cadastros</h3>
-              </div>
-              <ol class="ranking-list" id="cityRanking"></ol>
-            </article>
-            <article class="card">
-              <div class="card-header">
-                <h3>Pacientes por estado</h3>
-              </div>
-              <ol class="ranking-list" id="patientStateRanking"></ol>
-            </article>
-            <article class="card">
-              <div class="card-header">
-                <h3>Demanda por tipo sanguíneo</h3>
-              </div>
-              <ol class="ranking-list" id="bloodDemandRanking"></ol>
-            </article>
-          </div>
-
-          <div class="charts-grid">
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Distribuição regional</h3>
-              </div>
-              <div class="chart-box">
-                <canvas id="chartRegionalDistribution"></canvas>
-              </div>
-            </article>
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Demanda sanguínea</h3>
-              </div>
-              <div class="chart-box">
-                <canvas id="chartBloodDemand"></canvas>
-              </div>
-            </article>
-          </div>
-        </section>
-
-        <section class="tab-panel" id="tab-content" data-title="Conteudo" data-kicker="Gestao do site">
-          <div id="contentModuleRoot" class="content-module-root" aria-live="polite"></div>
-        </section>
-
-        <section class="tab-panel" id="tab-reports" data-title="Relatórios" data-kicker="Exportação e filtros">
-          <div class="section-heading">
-            <div>
-              <h2>Relatório consolidado</h2>
-              <p>Filtros aplicados sobre dados reais do Supabase</p>
-            </div>
-            <button class="action-button primary" type="button" id="btnReportExport">
-              <i data-lucide="file-down"></i>
-              <span>Exportar CSV</span>
-            </button>
-          </div>
-
-          <div class="filters-grid">
+          <div class="filters-grid support-filters-grid">
             <label>
-              <span>Período</span>
-              <select id="reportPeriodFilter">
-                <option value="all">Todo o período</option>
-                <option value="7">Últimos 7 dias</option>
-                <option value="30">Últimos 30 dias</option>
-                <option value="60">Últimos 60 dias</option>
-                <option value="90">Últimos 90 dias</option>
+              <span>Tipo de Interesse</span>
+              <select id="supportInterestFilter">
+                <option value="">Todos</option>
+                <option value="financeiro">Apoio Financeiro</option>
+                <option value="divulgacao">Divulgação / Voluntariado</option>
+                <option value="cadastro_doador">Doador de Medula / Sangue</option>
               </select>
             </label>
             <label>
-              <span>Estado</span>
-              <select id="reportStateFilter"></select>
+              <span>Status</span>
+              <select id="supportStatusFilter">
+                <option value="">Todos</option>
+                <option value="novo">Novo</option>
+                <option value="contatado">Contatado</option>
+                <option value="arquivado">Arquivado</option>
+              </select>
             </label>
-            <label>
-              <span>Tipo sanguíneo</span>
-              <select id="reportBloodFilter"></select>
-            </label>
+            <button class="action-button ghost" type="button" id="btnClearSupportFilters">
+              <i data-lucide="x"></i>
+              <span>Limpar</span>
+            </button>
           </div>
 
-          <article class="card report-summary">
-            <div class="card-header">
-              <h3>Resumo estatístico</h3>
+          <article class="card table-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Telefone</th>
+                    <th>Email</th>
+                    <th>Tipo de Interesse</th>
+                    <th>Campanha</th>
+                    <th>Origem</th>
+                    <th>Status</th>
+                    <th>Data</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="supportTableBody"></tbody>
+              </table>
             </div>
-            <p id="reportSummaryText"></p>
           </article>
-
-          <div class="metrics-grid compact" id="reportMetrics"></div>
+          <div class="record-list" id="supportList"></div>
         </section>
 
-        <section class="tab-panel" id="tab-settings" data-title="Configurações" data-kicker="Status da integração">
-          <div class="settings-layout">
-            <article class="card settings-card">
-              <div class="brand-block settings-brand">
-                <div class="logo-bubble">
-                  <img src="https://res.cloudinary.com/dm9mnc97u/image/upload/v1777674863/FLA_7_1_kkc5qi.png" alt="Logo Flamedula">
-                </div>
-                <div>
-                  <strong>Flamedula ADM</strong>
-                  <span>Painel administrativo conectado ao Supabase</span>
-                </div>
-              </div>
-              <div class="status-stack">
-                <div class="status-row">
-                  <span>Status do MVP</span>
-                  <strong class="badge positive">Operacional com Supabase</strong>
-                </div>
-                <div class="status-row">
-                  <span>Status Supabase</span>
-                  <strong class="badge info">Conectado via publishable key</strong>
-                </div>
-                <div class="status-row">
-                  <span>Login</span>
-                  <strong class="badge info">Supabase Auth</strong>
-                </div>
-              </div>
-            </article>
-
-            <article class="card settings-card">
-              <div class="card-header">
-                <h3>Acesso administrativo</h3>
-              </div>
-              <div class="credential-grid">
-                <div>
-                  <span>Email</span>
-                  <strong>Usuario criado no Supabase</strong>
-                </div>
-                <div>
-                  <span>Senha</span>
-                  <strong>Definida no Supabase Auth</strong>
-                </div>
-              </div>
-            </article>
-
-            <article class="card settings-card">
-              <div class="card-header">
-                <h3>Status da integração</h3>
-              </div>
-              <ul class="check-list">
-                <li>Leitura feita nas tabelas donor_leads, patient_cases, donation_intents e tabelas de conteudo.</li>
-                <li>Autenticação feita com Supabase Auth no frontend.</li>
-                <li>Estados vazios exibem zero, tabelas vazias e gráficos sem dados.</li>
-                <li>Somente publishable key no cliente; service_role permanece fora do frontend.</li>
-                <li>Upload Cloudinary usa Edge Function assinada; API secret nao vai para o navegador.</li>
-              </ul>
-            </article>
+        <section class="tab-panel" id="tab-matching" data-title="Pareamento de doadores" data-kicker="Cruzamento operacional de compatibilidade">
+          <div class="section-heading">
+            <div>
+              <h2>Pareamento de doadores</h2>
+              <p>Selecione um paciente para buscar doadores compatíveis na rede</p>
+            </div>
           </div>
+
+          <div class="matching-workspace-layout">
+            <aside class="matching-sidebar-card card">
+              <div class="card-header">
+                <h3>Pacientes</h3>
+              </div>
+              <div class="matching-patients-search">
+                <input type="search" id="matchingPatientSearch" placeholder="Filtrar pacientes...">
+              </div>
+              <ul class="matching-patient-list" id="matchingPatientList"></ul>
+            </aside>
+            <main class="matching-main-area" id="matchingMainArea">
+              <div class="matching-empty">
+                <i data-lucide="search-check" style="width:48px; height:48px; opacity:0.5; margin-bottom:12px; display:block; margin-left:auto; margin-right:auto;"></i>
+                <strong>Nenhum paciente selecionado</strong>
+                <p>Selecione um paciente da lista lateral para visualizar os doadores recomendados por compatibilidade, localização e disponibilidade.</p>
+              </div>
+            </main>
+          </div>
+        </section>
+
+        <section class="tab-panel" id="tab-audit" data-title="Auditoria administrativa" data-kicker="Logs de eventos do sistema">
+          <div class="section-heading">
+            <div>
+              <h2>Histórico de auditoria</h2>
+              <p id="auditResultCount">0 registros</p>
+            </div>
+          </div>
+
+          <article class="card table-card">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Usuário (ID)</th>
+                    <th>Ação</th>
+                    <th>Tabela</th>
+                    <th>Registro ID</th>
+                    <th>Contexto</th>
+                    <th>Data/Hora</th>
+                  </tr>
+                </thead>
+                <tbody id="auditTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <div class="record-list" id="auditList"></div>
         </section>
       </main>
     </div>

@@ -1,6 +1,6 @@
 import { listDonors } from "./donorService.js";
 import { listPatientCases } from "./patientService.js";
-import { listDonationIntents } from "./supportService.js";
+import { listDonationIntents, listSupportLeads } from "./supportService.js";
 import { fetchTable } from "./supabaseService.js";
 
 function normalizeDonor(row) {
@@ -79,32 +79,37 @@ export async function getDashboardData() {
       donorResult,
       patientResult,
       donationResult,
+      supportResult,
+      auditResult,
       metricsResult,
-      regionResult,
-      contentResult
+      regionResult
     ] = await Promise.all([
       listDonors(),
       listPatientCases(),
       listDonationIntents(),
+      listSupportLeads(),
+      fetchTable("audit_logs", { orderBy: "created_at", ascending: false }),
       getDashboardMetrics(),
-      getRegionSummary(),
-      getActiveContentSummary()
+      getRegionSummary()
     ]);
 
     return {
       donorLeads: donorResult.data.map(normalizeDonor),
       patients: patientResult.data.map(normalizePatientCase),
       monetaryDonations: donationResult.data.map(normalizeDonationIntent),
+      supportLeads: supportResult.data || [],
+      auditLogs: auditResult.data || [],
       dashboardMetrics: metricsResult.data,
       regionSummary: regionResult.data,
-      contentSummary: contentResult.data,
+      contentSummary: [],
       errors: [
         donorResult.error,
         patientResult.error,
         donationResult.error,
+        supportResult.error,
+        auditResult.error,
         metricsResult.error,
-        regionResult.error,
-        contentResult.error
+        regionResult.error
       ].filter(Boolean)
     };
   } catch (error) {
@@ -113,6 +118,8 @@ export async function getDashboardData() {
       donorLeads: [],
       patients: [],
       monetaryDonations: [],
+      supportLeads: [],
+      auditLogs: [],
       dashboardMetrics: [],
       regionSummary: [],
       contentSummary: [],
@@ -132,8 +139,4 @@ export function getDashboardMetrics() {
 
 export function getRegionSummary() {
   return fetchTable("v_donor_region_summary", { orderBy: null });
-}
-
-export function getActiveContentSummary() {
-  return fetchTable("v_content_status", { orderBy: null });
 }

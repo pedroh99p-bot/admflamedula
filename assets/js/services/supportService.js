@@ -15,3 +15,7 @@ export function getDonationIntent(id) {
 export function updateDonationIntentStatus(id, status) {
   return updateRecord("donation_intents", id, { status }, "Nao foi possivel atualizar a intencao de doacao.");
 }
+
+export function updateSupportLead(id, payload) {
+  return updateRecord("support_leads", id, payload, "Nao foi possivel atualizar o contato de apoio.");
+}

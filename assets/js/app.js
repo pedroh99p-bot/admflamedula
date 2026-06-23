@@ -4,11 +4,13 @@ import {
   getDashboardData,
   updateDonorContactStatus,
   updateDonorRecord,
-  updatePatientRecord
+  updatePatientRecord,
+  listSupportLeads,
+  updateSupportLead,
+  listAuditLogs
 } from "./api.js";
 import { bindAuthStateRedirect, handleLogout, requireAuth } from "./auth.js";
 import { renderDonationChart, renderOverviewCharts, renderRegionCharts } from "./charts.js";
-import { activateContentModule, initContentModule } from "./content/contentModule.js";
 import { demoDonations, demoDonors, demoPatients } from "./demo-data.js";
 import { showToast } from "./toast.js";
 import {
@@ -60,6 +62,10 @@ const state = {
     status: "",
     contato_whatsapp: ""
   },
+  supportFilters: {
+    interest: "",
+    status: ""
+  },
   reportFilters: {
     periodo: "all",
     estado: "",
@@ -70,6 +76,8 @@ const state = {
   donors: [],
   patients: [],
   donations: [],
+  supportLeads: [],
+  auditLogs: [],
   dashboardMetrics: [],
   regionSummary: [],
   contentSummary: [],
@@ -133,10 +141,6 @@ async function initApp() {
   applySavedTheme();
   applySavedDemoMode();
   bindEvents();
-  initContentModule({
-    root: document.getElementById("contentModuleRoot"),
-    getAdminRole
-  });
   await loadDashboardData();
   setActiveTab(location.hash.replace("#", "") || "overview", false);
 }
@@ -146,9 +150,10 @@ async function loadDashboardData() {
   state.donors = dashboardData.donorLeads || [];
   state.patients = dashboardData.patients || [];
   state.donations = dashboardData.monetaryDonations || [];
+  state.supportLeads = dashboardData.supportLeads || [];
+  state.auditLogs = dashboardData.auditLogs || [];
   state.dashboardMetrics = dashboardData.dashboardMetrics || [];
   state.regionSummary = dashboardData.regionSummary || [];
-  state.contentSummary = dashboardData.contentSummary || [];
   state.dataErrors = dashboardData.errors || [];
 
   populateFilters();
@@ -171,7 +176,19 @@ function applySavedDemoMode() {
 
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach((button) => {
-    button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+    button.addEventListener("click", () => {
+      const tab = button.dataset.tab;
+      if (tab === "cms") {
+        const cmsUrl = window.FLAMEDULA_CONFIG?.CMS_URL;
+        if (!cmsUrl) {
+          showToast("CMS ainda não configurado", "info");
+        } else {
+          window.open(cmsUrl, "_blank", "noopener,noreferrer");
+        }
+      } else {
+        setActiveTab(tab);
+      }
+    });
   });
 
   document.getElementById("btnMobileMenu")?.addEventListener("click", toggleSidebar);
@@ -191,15 +208,19 @@ function bindEvents() {
     renderAll();
   });
 
+  document.getElementById("matchingPatientSearch")?.addEventListener("input", () => {
+    renderMatching();
+  });
+
   bindFilter("donorStateFilter", "donorFilters", "estado");
   bindFilter("donorBloodFilter", "donorFilters", "tipo_sanguineo");
   bindFilter("donorStatusFilter", "donorFilters", "status");
   bindFilter("donorMarrowFilter", "donorFilters", "quer_doar_medula");
   bindFilter("donorWhatsappFilter", "donorFilters", "contato_whatsapp");
   bindDonationFilter();
-  bindFilter("reportPeriodFilter", "reportFilters", "periodo");
-  bindFilter("reportStateFilter", "reportFilters", "estado");
-  bindFilter("reportBloodFilter", "reportFilters", "tipo_sanguineo");
+
+  bindFilter("supportInterestFilter", "supportFilters", "interest");
+  bindFilter("supportStatusFilter", "supportFilters", "status");
 
   document.getElementById("btnClearDonorFilters")?.addEventListener("click", () => {
     state.donorFilters = {
@@ -221,6 +242,18 @@ function bindEvents() {
       if (field) field.value = "";
     });
 
+    renderAll();
+  });
+
+  document.getElementById("btnClearSupportFilters")?.addEventListener("click", () => {
+    state.supportFilters = {
+      interest: "",
+      status: ""
+    };
+    const interestField = document.getElementById("supportInterestFilter");
+    if (interestField) interestField.value = "";
+    const statusField = document.getElementById("supportStatusFilter");
+    if (statusField) statusField.value = "";
     renderAll();
   });
 
@@ -278,10 +311,6 @@ function setActiveTab(tab, updateHash = true) {
     history.replaceState(null, "", `#${target}`);
   }
 
-  if (target === "content") {
-    activateContentModule();
-  }
-
   closeSidebar();
   renderActiveCharts();
   createIcons();
@@ -294,8 +323,9 @@ function renderAll() {
   renderDonors();
   renderPatients();
   renderDonations();
-  renderRegions();
-  renderReports();
+  renderSupportLeads();
+  renderMatching();
+  renderAuditLogs();
   renderActiveCharts();
 
   if (state.formContext) {
@@ -303,7 +333,7 @@ function renderAll() {
     if (state.formContext) {
       renderEntityFormModal();
     }
-  } else if (state.matchingContext) {
+  } else if (state.matchingContext && state.activeTab !== "matching") {
     syncMatchingContext();
     if (state.matchingContext) {
       renderMatchingModal();
@@ -335,24 +365,57 @@ function renderDashboardAlert() {
 }
 
 function renderOverview() {
-  const donors = getGlobalDonors();
-  const patients = getGlobalPatients();
-  const donations = getGlobalDonations();
+  const donors = getDisplayDonors();
+  const patients = getDisplayPatients();
+  const donations = getDisplayDonations();
   const metrics = getDashboardMetricMap();
-  const contentPublished = getMetricValue(metrics, "published_content", sumBy(state.contentSummary, "publicados"));
-  const activeActions = getMetricValue(metrics, "active_actions", getContentCount("actions", "destaques"));
+
   const sourceDetail = state.demoMode ? "Real + FIC no front" : "Registros reais";
 
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const recentCount =
+    donors.filter(d => new Date(d.created_at) >= sevenDaysAgo).length +
+    patients.filter(p => new Date(p.created_at) >= sevenDaysAgo).length +
+    donations.filter(dn => new Date(dn.created_at) >= sevenDaysAgo).length +
+    state.supportLeads.filter(s => new Date(s.created_at) >= sevenDaysAgo).length;
+
   renderMetrics("overviewMetrics", [
-    { label: "Pessoas na rede", value: getMetricValue(metrics, "network_people", donors.length), detail: sourceDetail, icon: "users", tone: "red", featured: true },
-    { label: "Interessados em medula", value: getMetricValue(metrics, "marrow_interested", donors.filter((donor) => donor.quer_doar_medula).length), detail: "View Supabase", icon: "heart", tone: "red" },
-    { label: "Doadores acionaveis", value: getMetricValue(metrics, "actionable_donors", donors.filter((donor) => donor.status === "acionavel").length), detail: "Contatos autorizados", icon: "message-circle", tone: "green" },
-    { label: "Casos sinalizados", value: getMetricValue(metrics, "flagged_cases", patients.length), detail: state.demoMode ? "Casos reais + FIC" : "patient_cases", icon: "activity", tone: "blue" },
-    { label: "Intencoes de apoio", value: donations.length, detail: "donation_intents", icon: "receipt", tone: "blue" },
-    { label: "Aguardando configuracao", value: donations.filter((donation) => donation.status_pagamento === "pending_payment_setup").length, detail: "Apoio financeiro", icon: "clock", tone: "yellow" },
-    { label: "Conteudos publicados", value: contentPublished, detail: "View de conteudo", icon: "file-text", tone: "green" },
-    { label: "Acoes ativas", value: activeActions, detail: "Landing futura", icon: "calendar-check", tone: "yellow" }
+    { label: "Total de doadores", value: getMetricValue(metrics, "network_people", donors.length), detail: sourceDetail, icon: "users", tone: "red", featured: true },
+    { label: "Novos doadores", value: donors.filter(d => d.status === "novo").length, detail: "Aguardando contato", icon: "heart", tone: "red" },
+    { label: "Total de pacientes", value: patients.length, detail: "Casos sinalizados", icon: "activity", tone: "blue" },
+    { label: "Novos pacientes", value: patients.filter(p => p.status === "novo").length, detail: "Recém-cadastrados", icon: "clipboard", tone: "blue" },
+    { label: "Intencoes de apoio", value: donations.length, detail: "Apoio financeiro", icon: "dollar-sign", tone: "green" },
+    { label: "Contatos de apoio", value: state.supportLeads.length, detail: "Leads de suporte", icon: "phone", tone: "yellow" },
+    { label: "Aguardando contato", value: state.supportLeads.filter(s => s.status === "novo").length, detail: "Suporte pendente", icon: "clock", tone: "yellow" },
+    { label: "Registros recentes", value: recentCount, detail: "Últimos 7 dias", icon: "calendar-check", tone: "green" }
   ]);
+
+  const recentDonors = donors.map(d => ({ type: 'Doador', nome: d.nome, info: d.tipo_sanguineo || d.telefone || "-", date: d.created_at }));
+  const recentPatients = patients.map(p => ({ type: 'Paciente', nome: p.nome_paciente, info: p.diagnostico || p.hospital || "-", date: p.created_at }));
+  const recentDonations = donations.map(dn => ({ type: 'Apoio Fin.', nome: dn.nome, info: formatCurrency(dn.valor), date: dn.created_at }));
+  const recentSupport = state.supportLeads.map(s => ({ type: 'Contato Apoio', nome: s.name, info: s.support_interest_type || s.phone || "-", date: s.created_at }));
+
+  const allRecent = [
+    ...recentDonors,
+    ...recentPatients,
+    ...recentDonations,
+    ...recentSupport
+  ]
+  .sort((a, b) => new Date(b.date) - new Date(a.date))
+  .slice(0, 5);
+
+  const recentTbody = document.getElementById("recentRegistrationsTableBody");
+  if (recentTbody) {
+    recentTbody.innerHTML = allRecent.map(item => `
+      <tr>
+        <td><span class="badge info">${escapeHtml(item.type)}</span></td>
+        <td><strong>${escapeHtml(item.nome || "-")}</strong></td>
+        <td>${escapeHtml(item.info)}</td>
+        <td>${formatDateTime(item.date)}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="4" class="text-center">Nenhum registro recente nos últimos 7 dias.</td></tr>`;
+  }
 
   const update = new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
@@ -958,6 +1021,27 @@ function handleClickActions(event) {
     return;
   }
 
+  const supportWhatsappButton = event.target.closest("[data-support-whatsapp-id]");
+  if (supportWhatsappButton) {
+    openSupportWhatsApp(supportWhatsappButton.dataset.supportWhatsappId);
+    return;
+  }
+
+  const selectPatientItem = event.target.closest("[data-select-matching-patient-id]");
+  if (selectPatientItem) {
+    const patientId = selectPatientItem.dataset.selectMatchingPatientId;
+    const patient = findRecordById(getDisplayPatients(), patientId);
+    if (patient) {
+      state.matchingContext = {
+        patientId: String(patient.id),
+        patient,
+        matches: findCompatibleDonors(patient)
+      };
+      renderMatching();
+    }
+    return;
+  }
+
   const markDonorButton = event.target.closest("[data-mark-donor-contacted]");
   if (markDonorButton) {
     const donor = findRecordById(getDisplayDonors(), markDonorButton.dataset.markDonorContacted);
@@ -981,7 +1065,8 @@ function openDetails(type, id) {
   const record = {
     donor: findRecordById(getDisplayDonors(), id),
     patient: findRecordById(getDisplayPatients(), id),
-    donation: findRecordById(getDisplayDonations(), id)
+    donation: findRecordById(getDisplayDonations(), id),
+    support: findRecordById(state.supportLeads, id)
   }[type];
 
   if (!record) return;
@@ -1053,6 +1138,20 @@ function openDetails(type, id) {
         ["Origem", record.origem || "-"],
         ["Data", formatDateTime(record.created_at)]
       ]
+    },
+    support: {
+      kicker: "Contato de apoio",
+      title: record.name || "Registro",
+      fields: [
+        ["Email", record.email],
+        ["Telefone", record.phone],
+        ["Tipo de Interesse", record.support_interest_type],
+        ["Campanha", record.campaign_reference || "-"],
+        ["Origem", record.origem || "-"],
+        ["Status", record.status],
+        ["Data", formatDateTime(record.created_at)],
+        ["Notas", record.notes || "-"]
+      ]
     }
   };
 
@@ -1123,6 +1222,22 @@ function buildDetailActions(type, record) {
     `;
   }
 
+  if (type === "support") {
+    const phoneAvailable = Boolean(getWhatsAppPhone(record.phone));
+    return `
+      <div class="detail-actions">
+        <button class="action-button primary" type="button" ${phoneAvailable ? "" : "disabled"} data-support-whatsapp-id="${escapeHtml(record.id)}">
+          <i data-lucide="message-circle"></i>
+          <span>Enviar WhatsApp</span>
+        </button>
+        <button class="action-button ghost" type="button" data-edit-entity="support" data-id="${escapeHtml(record.id)}">
+          <i data-lucide="pencil"></i>
+          <span>Editar</span>
+        </button>
+      </div>
+    `;
+  }
+
   return `<div class="detail-actions"><span class="badge info">Detalhes do apoio financeiro</span></div>`;
 }
 
@@ -1158,12 +1273,20 @@ function renderEntityFormModal() {
   const record = getRecordForEntity(entityType, recordId);
   if (!record) return;
 
+  const kicker = entityType === "donor"
+    ? "Editar doador"
+    : entityType === "patient"
+      ? "Editar paciente"
+      : "Editar contato de apoio";
+
   const title = entityType === "donor"
     ? `Editar doador: ${record.nome || "Registro"}`
-    : `Editar paciente: ${record.nome_paciente || "Registro"}`;
+    : entityType === "patient"
+      ? `Editar paciente: ${record.nome_paciente || "Registro"}`
+      : `Editar contato de apoio: ${record.name || "Registro"}`;
 
   openModal({
-    kicker: entityType === "donor" ? "Editar doador" : "Editar paciente",
+    kicker,
     title,
     bodyMarkup: buildEntityFormMarkup(entityType, record, submitting),
     modalClass: "form-modal",
@@ -1173,37 +1296,54 @@ function renderEntityFormModal() {
 
 function buildEntityFormMarkup(entityType, record, submitting) {
   const isDonor = entityType === "donor";
+  const isPatient = entityType === "patient";
+
+  let fieldsHtml = "";
+  if (isDonor) {
+    fieldsHtml = `
+      ${renderTextField("Nome", "nome", record.nome)}
+      ${renderTextField("Email", "email", record.email, "email")}
+      ${renderTextField("Telefone", "telefone", record.telefone, "tel")}
+      ${renderTextField("Cidade", "cidade", record.cidade)}
+      ${renderTextField("Estado", "estado", record.estado)}
+      ${renderSelectField("Doador de sangue", "blood_donor_status", record.blood_donor_status, ["nao_informado", "ja_doador", "doador_recorrente", "quero_comecar", "interessado"])}
+      ${renderSelectField("Status REDOME", "redome_status", record.redome_status, ["nao_informado", "cadastrado", "nao_cadastrado"])}
+      ${renderSelectField("Interesse em medula", "medula_interest", record.medula_interest, ["nao", "sim", "quero_saber", "interessado"])}
+      ${renderSelectField("Preferencia de contato", "contact_preference", record.contact_preference, ["whatsapp", "email", "telefone"])}
+      ${renderBooleanField("Consentimento LGPD", "consent_lgpd", record.consent_lgpd)}
+      ${renderSelectField("Status", "status", record.status, donorStatuses, getDonorStatusLabel)}
+    `;
+  } else if (isPatient) {
+    fieldsHtml = `
+      ${renderTextField("Solicitante", "requester_name", record.requester_name || record.nome_paciente)}
+      ${renderTextField("Telefone solicitante", "requester_phone", record.requester_phone || record.telefone_responsavel, "tel")}
+      ${renderTextField("Identificacao do caso", "patient_identifier", record.patient_identifier || record.nome_paciente)}
+      ${renderTextField("Relacao com paciente", "relation_to_patient", record.relation_to_patient)}
+      ${renderTextField("Hospital", "hospital", record.hospital)}
+      ${renderTextField("Cidade", "cidade", record.cidade)}
+      ${renderTextField("Estado", "estado", record.estado)}
+      ${renderSelectField("Tipo de necessidade", "need_type", record.need_type || record.tipo_necessidade, ["sangue", "medula", "plaquetas", "campanha_cadastro_medula", "outro"])}
+      ${renderSelectField("Urgencia", "urgency_level", record.urgency_level || record.urgencia, ["baixa", "media", "alta"])}
+      ${renderBooleanField("Divulgacao autorizada", "consent_authorized", record.consent_authorized || record.autorizacao_divulgacao)}
+      ${renderSelectField("Status", "status", record.status, patientStatuses, getPatientStatusLabel)}
+    `;
+  } else {
+    fieldsHtml = `
+      ${renderTextField("Nome", "name", record.name)}
+      ${renderTextField("Email", "email", record.email, "email")}
+      ${renderTextField("Telefone", "phone", record.phone, "tel")}
+      ${renderTextField("Tipo de Interesse", "support_interest_type", record.support_interest_type)}
+      ${renderTextField("Origem", "origem", record.origem)}
+      ${renderSelectField("Status", "status", record.status, ["novo", "contatado", "arquivado"])}
+    `;
+  }
 
   return `
     <form id="entityForm" class="entity-form" data-entity-type="${entityType}" data-record-id="${escapeHtml(record.id)}">
       <div class="form-grid">
-        ${isDonor ? `
-          ${renderTextField("Nome", "nome", record.nome)}
-          ${renderTextField("Email", "email", record.email, "email")}
-          ${renderTextField("Telefone", "telefone", record.telefone, "tel")}
-          ${renderTextField("Cidade", "cidade", record.cidade)}
-          ${renderTextField("Estado", "estado", record.estado)}
-          ${renderSelectField("Doador de sangue", "blood_donor_status", record.blood_donor_status, ["nao_informado", "ja_doador", "doador_recorrente", "quero_comecar", "interessado"])}
-          ${renderSelectField("Status REDOME", "redome_status", record.redome_status, ["nao_informado", "cadastrado", "nao_cadastrado"])}
-          ${renderSelectField("Interesse em medula", "medula_interest", record.medula_interest, ["nao", "sim", "quero_saber", "interessado"])}
-          ${renderSelectField("Preferencia de contato", "contact_preference", record.contact_preference, ["whatsapp", "email", "telefone"])}
-          ${renderBooleanField("Consentimento LGPD", "consent_lgpd", record.consent_lgpd)}
-          ${renderSelectField("Status", "status", record.status, donorStatuses, getDonorStatusLabel)}
-        ` : `
-          ${renderTextField("Solicitante", "requester_name", record.requester_name || record.nome_paciente)}
-          ${renderTextField("Telefone solicitante", "requester_phone", record.requester_phone || record.telefone_responsavel, "tel")}
-          ${renderTextField("Identificacao do caso", "patient_identifier", record.patient_identifier || record.nome_paciente)}
-          ${renderTextField("Relacao com paciente", "relation_to_patient", record.relation_to_patient)}
-          ${renderTextField("Hospital", "hospital", record.hospital)}
-          ${renderTextField("Cidade", "cidade", record.cidade)}
-          ${renderTextField("Estado", "estado", record.estado)}
-          ${renderSelectField("Tipo de necessidade", "need_type", record.need_type || record.tipo_necessidade, ["sangue", "medula", "plaquetas", "campanha_cadastro_medula", "outro"])}
-          ${renderSelectField("Urgencia", "urgency_level", record.urgency_level || record.urgencia, ["baixa", "media", "alta"])}
-          ${renderBooleanField("Divulgacao autorizada", "consent_authorized", record.consent_authorized || record.autorizacao_divulgacao)}
-          ${renderSelectField("Status", "status", record.status, patientStatuses, getPatientStatusLabel)}
-        `}
+        ${fieldsHtml}
       </div>
-      ${renderTextareaField("Observacoes", "observacoes", record.observacoes)}
+      ${renderTextareaField("Observacoes", "observacoes", record.notes || record.observacoes)}
       <div class="form-actions">
         <button class="action-button ghost" type="button" id="btnCancelEntityForm">Cancelar</button>
         <button class="action-button primary" type="submit" ${submitting ? "disabled" : ""}>
@@ -1226,7 +1366,9 @@ async function handleEntityFormSubmit(event) {
   const formData = new FormData(event.target);
   const payload = entityType === "donor"
     ? buildDonorPayload(formData)
-    : buildPatientPayload(formData);
+    : entityType === "patient"
+      ? buildPatientPayload(formData)
+      : buildSupportPayload(formData);
 
   state.formContext = {
     ...state.formContext,
@@ -1237,13 +1379,21 @@ async function handleEntityFormSubmit(event) {
   try {
     const updatedRecord = entityType === "donor"
       ? await updateDonorRecord(recordId, payload)
-      : await updatePatientRecord(recordId, payload);
+      : entityType === "patient"
+        ? await updatePatientRecord(recordId, payload)
+        : await updateSupportLead(recordId, payload);
 
     replaceRecordInState(entityType, updatedRecord);
     populateFilters();
     state.formContext = null;
     renderAll();
-    showToast(entityType === "donor" ? "Doador atualizado com sucesso." : "Paciente atualizado com sucesso.");
+
+    let successMessage = "Registro atualizado com sucesso.";
+    if (entityType === "donor") successMessage = "Doador atualizado com sucesso.";
+    else if (entityType === "patient") successMessage = "Paciente atualizado com sucesso.";
+    else if (entityType === "support") successMessage = "Contato de apoio atualizado com sucesso.";
+
+    showToast(successMessage);
 
     if (entityType === "donor" && returnToMatchingPatientId) {
       openMatchingModal(returnToMatchingPatientId);
@@ -1795,14 +1945,13 @@ function exportMatchingCsv() {
 
 function exportActiveTab() {
   const exporters = {
-    overview: () => exportDonorsCsv(getGlobalDonors(), "flamedula_visao_geral_doadores.csv"),
+    overview: () => exportDonorsCsv(getDisplayDonors(), "flamedula_visao_geral_doadores.csv"),
     donors: () => exportDonorsCsv(getFilteredDonors(), "flamedula_doadores.csv"),
     patients: () => exportPatientsCsv(getGlobalPatients(), "flamedula_pacientes.csv"),
     donations: () => exportDonationsCsv(getFilteredDonations(), "flamedula_doacoes.csv"),
-    regions: () => exportDonorsCsv(getGlobalDonors(), "flamedula_regioes.csv"),
-    content: () => showToast("Use os filtros da aba Conteudo para revisar os registros.", "error"),
-    reports: exportReportCsv,
-    settings: () => showToast("Nao ha dados para exportar", "error")
+    support: () => exportSupportLeadsCsv(getFilteredSupportLeads(), "flamedula_contatos_apoio.csv"),
+    matching: () => showToast("Escolha um paciente e use o botao 'Exportar lista CSV' dentro do painel.", "info"),
+    audit: () => exportAuditLogsCsv(state.auditLogs, "flamedula_auditoria.csv")
   };
 
   exporters[state.activeTab]?.();
@@ -2026,6 +2175,18 @@ function buildPatientPayload(formData) {
   };
 }
 
+function buildSupportPayload(formData) {
+  return {
+    name: getStringValue(formData, "name"),
+    email: getStringValue(formData, "email"),
+    phone: getStringValue(formData, "phone"),
+    support_interest_type: getStringValue(formData, "support_interest_type"),
+    origem: getStringValue(formData, "origem"),
+    status: getStringValue(formData, "status"),
+    notes: getNullableStringValue(formData, "observacoes")
+  };
+}
+
 function getStringValue(formData, key) {
   return String(formData.get(key) || "").trim();
 }
@@ -2047,9 +2208,9 @@ function getBooleanValue(formData, key) {
 }
 
 function getRecordForEntity(entityType, id) {
-  return entityType === "donor"
-    ? findRecordById(state.donors, id)
-    : findRecordById(state.patients, id);
+  if (entityType === "donor") return findRecordById(state.donors, id);
+  if (entityType === "patient") return findRecordById(state.patients, id);
+  return findRecordById(state.supportLeads, id);
 }
 
 function replaceRecordInState(entityType, updatedRecord) {
@@ -2059,8 +2220,13 @@ function replaceRecordInState(entityType, updatedRecord) {
     ));
     return;
   }
-
-  state.patients = state.patients.map((item) => (
+  if (entityType === "patient") {
+    state.patients = state.patients.map((item) => (
+      String(item.id) === String(updatedRecord.id) ? { ...item, ...updatedRecord } : item
+    ));
+    return;
+  }
+  state.supportLeads = state.supportLeads.map((item) => (
     String(item.id) === String(updatedRecord.id) ? { ...item, ...updatedRecord } : item
   ));
 }
@@ -2070,8 +2236,11 @@ function removeRecordFromState(entityType, id) {
     state.donors = state.donors.filter((item) => String(item.id) !== String(id));
     return;
   }
-
-  state.patients = state.patients.filter((item) => String(item.id) !== String(id));
+  if (entityType === "patient") {
+    state.patients = state.patients.filter((item) => String(item.id) !== String(id));
+    return;
+  }
+  state.supportLeads = state.supportLeads.filter((item) => String(item.id) !== String(id));
 }
 
 function findRecordById(collection, id) {
@@ -2163,4 +2332,288 @@ function createIcons() {
   if (typeof lucide !== "undefined") {
     lucide.createIcons();
   }
+}
+
+/* --- Novas Seções Operacionais (Suporte, Pareamento, Auditoria) --- */
+
+function renderSupportLeads() {
+  const supportLeads = getFilteredSupportLeads();
+  const countEl = document.getElementById("supportResultCount");
+  if (countEl) countEl.textContent = `${formatNumber(supportLeads.length)} registros`;
+
+  const body = document.getElementById("supportTableBody");
+  if (body) {
+    body.innerHTML = supportLeads
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map(renderSupportLeadRow)
+      .join("") || `<tr><td colspan="9" class="text-center">Nenhum contato de apoio encontrado.</td></tr>`;
+  }
+
+  const list = document.getElementById("supportList");
+  if (list) {
+    list.innerHTML = supportLeads
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map(renderSupportLeadCard)
+      .join("") || emptyListState("Nenhum contato de apoio encontrado.");
+  }
+}
+
+function getFilteredSupportLeads() {
+  return state.supportLeads.filter((lead) => {
+    const interest = document.getElementById("supportInterestFilter")?.value || "";
+    const status = document.getElementById("supportStatusFilter")?.value || "";
+
+    const queryMatches = !state.globalQuery || includesQuery(lead, ["name", "email", "phone", "support_interest_type", "campaign_reference", "notes", "origem", "status"], state.globalQuery);
+
+    return queryMatches
+      && (!interest || lead.support_interest_type === interest)
+      && (!status || lead.status === status);
+  });
+}
+
+function renderSupportLeadRow(lead) {
+  return `
+    <tr>
+      <td><strong>${escapeHtml(lead.name || "-")}</strong></td>
+      <td>${escapeHtml(lead.phone || "-")}</td>
+      <td>${escapeHtml(lead.email || "-")}</td>
+      <td><span class="badge info">${escapeHtml(lead.support_interest_type || "-")}</span></td>
+      <td>${escapeHtml(lead.campaign_reference || "-")}</td>
+      <td>${escapeHtml(lead.origem || "-")}</td>
+      <td><span class="badge ${statusClass(lead.status)}">${escapeHtml(lead.status)}</span></td>
+      <td>${formatDate(lead.created_at)}</td>
+      <td>
+        <div class="row-actions">
+          <button class="icon-button" type="button" data-detail-type="support" data-id="${escapeHtml(lead.id)}" aria-label="Ver detalhes">
+            <i data-lucide="eye"></i>
+          </button>
+          <button class="icon-button" type="button" data-edit-entity="support" data-id="${escapeHtml(lead.id)}" aria-label="Editar status">
+            <i data-lucide="pencil"></i>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderSupportLeadCard(lead) {
+  return `
+    <article class="record-card">
+      <div class="record-main">
+        <div class="record-title-row">
+          <div>
+            <strong>${escapeHtml(lead.name || "-")}</strong>
+            <small>${escapeHtml(lead.phone || "Telefone nao informado")}</small>
+          </div>
+          <span class="badge ${statusClass(lead.status)}">${escapeHtml(lead.status)}</span>
+        </div>
+        <div class="record-meta-grid">
+          <div>
+            <span>Interesse</span>
+            <strong>${escapeHtml(lead.support_interest_type || "-")}</strong>
+          </div>
+          <div>
+            <span>Campanha</span>
+            <strong>${escapeHtml(lead.campaign_reference || "-")}</strong>
+          </div>
+          <div>
+            <span>Origem</span>
+            <strong>${escapeHtml(lead.origem || "-")}</strong>
+          </div>
+          <div>
+            <span>Email</span>
+            <strong>${escapeHtml(lead.email || "-")}</strong>
+          </div>
+        </div>
+      </div>
+      <div class="record-actions-row">
+        <button class="action-button primary" type="button" data-detail-type="support" data-id="${escapeHtml(lead.id)}">
+          <i data-lucide="eye"></i>
+          <span>Visualizar</span>
+        </button>
+        <button class="action-button secondary" type="button" data-edit-entity="support" data-id="${escapeHtml(lead.id)}">
+          <i data-lucide="pencil"></i>
+          <span>Editar</span>
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function renderMatching() {
+  const list = document.getElementById("matchingPatientList");
+  if (!list) return;
+
+  const searchQuery = document.getElementById("matchingPatientSearch")?.value || "";
+  const patients = getGlobalPatients().filter(p =>
+    includesQuery(p, ["nome_paciente", "hospital", "cidade", "estado", "tipo_sanguineo"], searchQuery)
+  );
+
+  list.innerHTML = patients.map(patient => {
+    const isSelected = state.matchingContext?.patientId === String(patient.id);
+    return `
+      <li class="${isSelected ? 'selected' : ''}" data-select-matching-patient-id="${escapeHtml(patient.id)}">
+        <div class="matching-patient-item-header">
+          <strong>${escapeHtml(patient.nome_paciente || "Caso sinalizado")}</strong>
+          <span class="badge ${patient.urgencia === 'alta' ? 'danger' : 'info'}">${escapeHtml(patient.urgencia || 'baixa')}</span>
+        </div>
+        <div class="matching-patient-item-meta">
+          <span>${escapeHtml(patient.tipo_sanguineo || "-")}</span>
+          <span>${escapeHtml(patient.hospital || "-")}</span>
+        </div>
+      </li>
+    `;
+  }).join("") || `<li class="empty-list-item">Nenhum paciente encontrado</li>`;
+
+  const mainArea = document.getElementById("matchingMainArea");
+  if (!mainArea) return;
+
+  if (state.matchingContext) {
+    const { patient, matches } = state.matchingContext;
+    mainArea.innerHTML = buildMatchingModalMarkup(patient, matches);
+  } else {
+    mainArea.innerHTML = `
+      <div class="matching-empty" style="text-align: center; padding: 48px 16px;">
+        <i data-lucide="search-check" style="width:48px; height:48px; opacity:0.5; margin-bottom:12px; display:block; margin-left:auto; margin-right:auto;"></i>
+        <strong>Nenhum paciente selecionado</strong>
+        <p>Selecione um paciente da lista lateral para visualizar os doadores recomendados por compatibilidade, localização e disponibilidade.</p>
+      </div>
+    `;
+  }
+  createIcons();
+}
+
+function renderAuditLogs() {
+  const countEl = document.getElementById("auditResultCount");
+  if (countEl) countEl.textContent = `${formatNumber(state.auditLogs.length)} registros`;
+
+  const body = document.getElementById("auditTableBody");
+  if (body) {
+    body.innerHTML = state.auditLogs
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map(renderAuditLogRow)
+      .join("") || `<tr><td colspan="6" class="text-center">Nenhum log de auditoria encontrado.</td></tr>`;
+  }
+
+  const list = document.getElementById("auditList");
+  if (list) {
+    list.innerHTML = state.auditLogs
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .map(renderAuditLogCard)
+      .join("") || emptyListState("Nenhum log de auditoria encontrado.");
+  }
+}
+
+function getAuditContextSummary(log) {
+  const prev = log.previous_data || {};
+  const next = log.new_data || {};
+  const changes = [];
+  const keys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  const ignore = ["password", "token", "secret", "cvv", "card", "password_hash", "encrypted_password", "updated_at"];
+
+  for (const key of keys) {
+    if (ignore.some(i => key.toLowerCase().includes(i))) continue;
+    if (JSON.stringify(prev[key]) !== JSON.stringify(next[key])) {
+      const prevVal = prev[key] !== undefined ? JSON.stringify(prev[key]) : "nulo";
+      const nextVal = next[key] !== undefined ? JSON.stringify(next[key]) : "nulo";
+      changes.push(`${key}: ${prevVal} -> ${nextVal}`);
+    }
+  }
+
+  if (changes.length === 0) {
+    return log.action || "Sem alteracoes de campos";
+  }
+  return changes.join(", ");
+}
+
+function renderAuditLogRow(log) {
+  return `
+    <tr>
+      <td><strong>${escapeHtml(log.admin_user_id || "Sistema")}</strong></td>
+      <td><span class="badge info">${escapeHtml(log.action || "-")}</span></td>
+      <td>${escapeHtml(log.entity_type || "-")}</td>
+      <td><small>${escapeHtml(log.entity_id || "-")}</small></td>
+      <td><small style="word-break: break-all; max-width: 300px; display: inline-block;">${escapeHtml(getAuditContextSummary(log))}</small></td>
+      <td>${formatDateTime(log.created_at)}</td>
+    </tr>
+  `;
+}
+
+function renderAuditLogCard(log) {
+  return `
+    <article class="record-card">
+      <div class="record-main">
+        <div class="record-title-row">
+          <div>
+            <strong>${escapeHtml(log.action || "-")}</strong>
+            <small>Tabela: ${escapeHtml(log.entity_type || "-")}</small>
+          </div>
+          <span class="badge info">${formatDateTime(log.created_at)}</span>
+        </div>
+        <div class="record-meta-grid">
+          <div>
+            <span>Usuario (ID)</span>
+            <strong>${escapeHtml(log.admin_user_id || "Sistema")}</strong>
+          </div>
+          <div>
+            <span>Registro ID</span>
+            <strong><small>${escapeHtml(log.entity_id || "-")}</small></strong>
+          </div>
+          <div>
+            <span>Contexto</span>
+            <strong><small>${escapeHtml(getAuditContextSummary(log))}</small></strong>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function openSupportWhatsApp(id) {
+  const lead = findRecordById(state.supportLeads, id);
+  if (!lead) return;
+  const phone = getWhatsAppPhone(lead.phone);
+  if (!phone) {
+    showToast("Telefone invalido.", "error");
+    return;
+  }
+  const message = `Ola, ${lead.name || "apoiador"}. Entramos em contato a partir do seu cadastro de apoio no site da FlaMedula.`;
+  const url = `https://api.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function exportSupportLeadsCsv(rows, filename) {
+  if (!rows.length) {
+    showToast("Nao ha dados para exportar", "error");
+    return;
+  }
+  downloadCSV(toCsv(rows, [
+    { label: "id", value: "id" },
+    { label: "created_at", value: "created_at" },
+    { label: "name", value: "name" },
+    { label: "email", value: "email" },
+    { label: "phone", value: "phone" },
+    { label: "support_interest_type", value: "support_interest_type" },
+    { label: "campaign_reference", value: "campaign_reference" },
+    { label: "status", value: "status" },
+    { label: "notes", value: "notes" },
+    { label: "origem", value: "origem" }
+  ]), filename);
+  showToast("CSV gerado com dados reais.");
+}
+
+function exportAuditLogsCsv(rows, filename) {
+  if (!rows.length) {
+    showToast("Nao ha dados para exportar", "error");
+    return;
+  }
+  downloadCSV(toCsv(rows, [
+    { label: "id", value: "id" },
+    { label: "created_at", value: "created_at" },
+    { label: "admin_user_id", value: "admin_user_id" },
+    { label: "action", value: "action" },
+    { label: "entity_type", value: "entity_type" },
+    { label: "entity_id", value: "entity_id" }
+  ]), filename);
+  showToast("CSV gerado com dados reais.");
 }

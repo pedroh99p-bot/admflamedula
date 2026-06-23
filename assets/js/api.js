@@ -8,6 +8,13 @@ import {
   deletePatientRecord,
   updatePatientRecord
 } from "./services/patientService.js";
+import {
+  listSupportLeads,
+  updateSupportLead,
+  listDonationIntents,
+  updateDonationIntentStatus
+} from "./services/supportService.js";
+import { listAuditLogs } from "./services/auditService.js";
 
 export {
   deleteDonorRecord,
@@ -15,5 +22,10 @@ export {
   getDashboardData,
   updateDonorContactStatus,
   updateDonorRecord,
-  updatePatientRecord
+  updatePatientRecord,
+  listSupportLeads,
+  updateSupportLead,
+  listDonationIntents,
+  updateDonationIntentStatus,
+  listAuditLogs
 };
