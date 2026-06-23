@@ -875,7 +875,7 @@ function renderContent() {
   const createButton = document.getElementById("btnCreateContent");
   if (createButton) {
     createButton.dataset.contentType = state.contentType;
-    createButton.disabled = state.contentLoading;
+    createButton.disabled = false;
   }
 
   const rows = state.contentRows;
