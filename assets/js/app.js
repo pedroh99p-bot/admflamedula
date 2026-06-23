@@ -57,10 +57,11 @@ const state = {
   globalQuery: "",
   donorFilters: {
     estado: "",
-    tipo_sanguineo: "",
-    quer_doar_medula: "",
+    redome_status: "",
+    medula_interest: "",
     status: "",
-    contato_whatsapp: ""
+    contato_whatsapp: "",
+    segment: "all"
   },
   supportFilters: {
     interest: "",
@@ -133,6 +134,12 @@ async function initApp() {
   state.session = await requireAuth();
   if (!state.session) return;
   state.adminProfile = state.session.adminProfile || null;
+
+  const demoToggleEl = document.querySelector(".demo-toggle");
+  if (demoToggleEl) {
+    demoToggleEl.style.display = getAdminRole() === "super_admin" ? "inline-flex" : "none";
+  }
+
   bindAuthStateRedirect();
 
   document.documentElement.classList.remove("auth-checking", "redirect-login");
@@ -208,14 +215,29 @@ function bindEvents() {
     renderAll();
   });
 
+  document.getElementById("btnSidebarLogout")?.addEventListener("click", () => handleLogout());
+
+  document.querySelectorAll(".segment-tabs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".segment-tabs button").forEach((btn) => {
+        btn.classList.remove("active");
+        btn.classList.add("secondary");
+      });
+      button.classList.add("active");
+      button.classList.remove("secondary");
+
+      state.donorFilters.segment = button.dataset.segment;
+      renderDonors();
+    });
+  });
+
   document.getElementById("matchingPatientSearch")?.addEventListener("input", () => {
     renderMatching();
   });
-
   bindFilter("donorStateFilter", "donorFilters", "estado");
-  bindFilter("donorBloodFilter", "donorFilters", "tipo_sanguineo");
+  bindFilter("donorRedomeFilter", "donorFilters", "redome_status");
   bindFilter("donorStatusFilter", "donorFilters", "status");
-  bindFilter("donorMarrowFilter", "donorFilters", "quer_doar_medula");
+  bindFilter("donorMarrowFilter", "donorFilters", "medula_interest");
   bindFilter("donorWhatsappFilter", "donorFilters", "contato_whatsapp");
   bindDonationFilter();
 
@@ -225,15 +247,16 @@ function bindEvents() {
   document.getElementById("btnClearDonorFilters")?.addEventListener("click", () => {
     state.donorFilters = {
       estado: "",
-      tipo_sanguineo: "",
-      quer_doar_medula: "",
+      redome_status: "",
+      medula_interest: "",
       status: "",
-      contato_whatsapp: ""
+      contato_whatsapp: "",
+      segment: state.donorFilters.segment
     };
 
     [
       "donorStateFilter",
-      "donorBloodFilter",
+      "donorRedomeFilter",
       "donorStatusFilter",
       "donorMarrowFilter",
       "donorWhatsappFilter"
@@ -242,7 +265,7 @@ function bindEvents() {
       if (field) field.value = "";
     });
 
-    renderAll();
+    renderAll();;
   });
 
   document.getElementById("btnClearSupportFilters")?.addEventListener("click", () => {
@@ -323,8 +346,6 @@ function renderAll() {
   renderDonors();
   renderPatients();
   renderDonations();
-  renderSupportLeads();
-  renderMatching();
   renderAuditLogs();
   renderActiveCharts();
 
@@ -358,7 +379,6 @@ function renderDashboardAlert() {
     alert.innerHTML = "";
     return;
   }
-
   const messages = [...new Set(state.dataErrors.map((error) => error.message))];
   alert.hidden = false;
   alert.innerHTML = messages.map((message) => `<p>${escapeHtml(message)}</p>`).join("");
@@ -368,39 +388,94 @@ function renderOverview() {
   const donors = getDisplayDonors();
   const patients = getDisplayPatients();
   const donations = getDisplayDonations();
-  const metrics = getDashboardMetricMap();
-
-  const sourceDetail = state.demoMode ? "Real + FIC no front" : "Registros reais";
 
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const recentCount =
     donors.filter(d => new Date(d.created_at) >= sevenDaysAgo).length +
     patients.filter(p => new Date(p.created_at) >= sevenDaysAgo).length +
-    donations.filter(dn => new Date(dn.created_at) >= sevenDaysAgo).length +
-    state.supportLeads.filter(s => new Date(s.created_at) >= sevenDaysAgo).length;
+    donations.filter(dn => new Date(dn.created_at) >= sevenDaysAgo).length;
 
   renderMetrics("overviewMetrics", [
-    { label: "Total de doadores", value: getMetricValue(metrics, "network_people", donors.length), detail: sourceDetail, icon: "users", tone: "red", featured: true },
-    { label: "Novos doadores", value: donors.filter(d => d.status === "novo").length, detail: "Aguardando contato", icon: "heart", tone: "red" },
-    { label: "Total de pacientes", value: patients.length, detail: "Casos sinalizados", icon: "activity", tone: "blue" },
-    { label: "Novos pacientes", value: patients.filter(p => p.status === "novo").length, detail: "Recém-cadastrados", icon: "clipboard", tone: "blue" },
-    { label: "Intencoes de apoio", value: donations.length, detail: "Apoio financeiro", icon: "dollar-sign", tone: "green" },
-    { label: "Contatos de apoio", value: state.supportLeads.length, detail: "Leads de suporte", icon: "phone", tone: "yellow" },
-    { label: "Aguardando contato", value: state.supportLeads.filter(s => s.status === "novo").length, detail: "Suporte pendente", icon: "clock", tone: "yellow" },
-    { label: "Registros recentes", value: recentCount, detail: "Últimos 7 dias", icon: "calendar-check", tone: "green" }
+    { label: "Total de doadores", value: donors.length, detail: "Pessoas cadastradas", icon: "users", tone: "red", featured: true },
+    { label: "Já são doadores", value: donors.filter(d => d.redome_status === "cadastrado").length, detail: "Cadastro REDOME", icon: "check-circle", tone: "red" },
+    { label: "Interessados", value: donors.filter(d => d.medula_interest === "sim").length, detail: "Querem se tornar doadores", icon: "heart", tone: "red" },
+    { label: "Pacientes cadastrados", value: patients.length, detail: "Casos de pacientes", icon: "activity", tone: "blue" },
+    { label: "Ainda não são doadores", value: donors.filter(d => d.redome_status === "nao_cadastrado").length, detail: "Não cadastrados no REDOME", icon: "users-round", tone: "blue" },
+    { label: "Sem interesse", value: donors.filter(d => d.medula_interest === "nao").length, detail: "Ausência de intenção", icon: "x-circle", tone: "yellow" },
+    { label: "Aguardando contato", value: donors.filter(d => d.status === "novo").length, detail: "Doadores novos", icon: "clock", tone: "yellow" },
+    { label: "Novos cadastros", value: recentCount, detail: "Últimos 7 dias", icon: "calendar-check", tone: "green" }
   ]);
 
-  const recentDonors = donors.map(d => ({ type: 'Doador', nome: d.nome, info: d.tipo_sanguineo || d.telefone || "-", date: d.created_at }));
-  const recentPatients = patients.map(p => ({ type: 'Paciente', nome: p.nome_paciente, info: p.diagnostico || p.hospital || "-", date: p.created_at }));
-  const recentDonations = donations.map(dn => ({ type: 'Apoio Fin.', nome: dn.nome, info: formatCurrency(dn.valor), date: dn.created_at }));
-  const recentSupport = state.supportLeads.map(s => ({ type: 'Contato Apoio', nome: s.name, info: s.support_interest_type || s.phone || "-", date: s.created_at }));
+  // Render funnel progress bars
+  const totalDonors = donors.length;
+  const jaDoadoresCount = donors.filter(d => d.redome_status === "cadastrado").length;
+  const aindaNaoCount = donors.filter(d => d.redome_status === "nao_cadastrado").length;
+  const interessadosCount = donors.filter(d => d.medula_interest === "sim").length;
+  const semInteresseCount = donors.filter(d => d.medula_interest === "nao").length;
+  const naoInformadosCount = donors.filter(d => {
+    const isRedomeUnk = !d.redome_status || d.redome_status === "nao_informado";
+    const isInterestUnk = !d.medula_interest || d.medula_interest === "nao_informado";
+    return isRedomeUnk && isInterestUnk;
+  }).length;
+
+  const funnelContainer = document.getElementById("overviewFunnel");
+  if (funnelContainer) {
+    funnelContainer.innerHTML = `
+      ${makeFunnelBar("Já cadastrados no REDOME", jaDoadoresCount, totalDonors, "red")}
+      ${makeFunnelBar("Ainda não cadastrados no REDOME", aindaNaoCount, totalDonors, "blue")}
+      ${makeFunnelBar("Interessados em doar medula", interessadosCount, totalDonors, "green")}
+      ${makeFunnelBar("Sem interesse no momento", semInteresseCount, totalDonors, "yellow")}
+      ${makeFunnelBar("Informação não preenchida", naoInformadosCount, totalDonors, "gray")}
+    `;
+  }
+
+  // Render geographical list
+  const donorStates = countBy(donors, "estado");
+  const topDonorStates = sortEntriesByValue(donorStates, 5);
+
+  const patientsByState = countBy(patients, "estado");
+  const topPatientStates = sortEntriesByValue(patientsByState, 5);
+
+  const hospitals = countBy(patients.filter(p => p.hospital), "hospital");
+  const topHospitals = sortEntriesByValue(hospitals, 5);
+
+  const donorsGeoList = document.getElementById("donorsGeoList");
+  if (donorsGeoList) {
+    donorsGeoList.innerHTML = topDonorStates.map(([state, count]) => `
+      <div class="geo-item">
+        <span>Estado: ${escapeHtml(state || "Não informado")}</span>
+        <span class="count">${count}</span>
+      </div>
+    `).join("") || `<p class="empty-row">Nenhum dado geográfico.</p>`;
+  }
+
+  const patientsGeoList = document.getElementById("patientsGeoList");
+  if (patientsGeoList) {
+    const stateItems = topPatientStates.map(([state, count]) => `
+      <div class="geo-item patient-geo">
+        <span>Estado: ${escapeHtml(state || "Não informado")}</span>
+        <span class="count">${count}</span>
+      </div>
+    `);
+    const hospitalItems = topHospitals.map(([hosp, count]) => `
+      <div class="geo-item patient-geo" style="border-left: 3px solid var(--blue)">
+        <span>Hosp: ${escapeHtml(hosp)}</span>
+        <span class="count">${count}</span>
+      </div>
+    `);
+    patientsGeoList.innerHTML = [...stateItems, ...hospitalItems].join("") || `<p class="empty-row">Nenhum dado geográfico.</p>`;
+  }
+
+  // Render recent registrations
+  const recentDonors = donors.map(d => ({ type: 'Doador', nome: d.nome, info: d.cidade ? `${d.cidade}/${d.estado}` : (d.telefone || "-"), date: d.created_at }));
+  const recentPatients = patients.map(p => ({ type: 'Paciente', nome: p.nome_paciente, info: p.hospital || p.cidade || "-", date: p.created_at }));
+  const recentDonations = donations.map(dn => ({ type: 'Apoie', nome: dn.nome, info: dn.valor ? formatCurrency(dn.valor) : "-", date: dn.created_at }));
 
   const allRecent = [
     ...recentDonors,
     ...recentPatients,
-    ...recentDonations,
-    ...recentSupport
+    ...recentDonations
   ]
   .sort((a, b) => new Date(b.date) - new Date(a.date))
   .slice(0, 5);
@@ -422,6 +497,21 @@ function renderOverview() {
     timeStyle: "short"
   }).format(new Date());
   document.getElementById("lastUpdate").textContent = `Atualizado em ${update}`;
+}
+
+function makeFunnelBar(label, count, total, colorClass) {
+  const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+  return `
+    <div class="funnel-row">
+      <div class="funnel-row-header">
+        <span>${escapeHtml(label)}</span>
+        <span class="count">${count} (${percent}%)</span>
+      </div>
+      <div class="funnel-bar-outer">
+        <div class="funnel-bar-inner ${colorClass}" style="width: ${percent}%"></div>
+      </div>
+    </div>
+  `;
 }
 
 function getDashboardMetricMap() {
@@ -504,15 +594,30 @@ function renderDonations() {
 function renderDonorCard(donor) {
   const phoneAvailable = Boolean(getWhatsAppPhone(donor.telefone));
 
+  function translateRedome(status) {
+    if (status === 'cadastrado') return 'Sim';
+    if (status === 'nao_cadastrado') return 'Não';
+    return 'Não informado';
+  }
+
+  function translateInterest(interest) {
+    if (interest === 'sim') return 'Sim';
+    if (interest === 'nao') return 'Não';
+    if (interest === 'quero_saber') return 'Quero saber mais';
+    return 'Não informado';
+  }
+
+  const redomeText = translateRedome(donor.redome_status);
+  const interestText = translateInterest(donor.medula_interest);
+
   return `
     <article class="record-card">
       <div class="record-main">
         <div class="record-title-row">
           <div>
             <strong>${escapeHtml(donor.nome || "-")}</strong>
-            <small>${escapeHtml(donor.telefone || "Telefone nao informado")}</small>
+            <small>${escapeHtml(donor.telefone || "Telefone não informado")}</small>
           </div>
-          <span class="blood-chip">${escapeHtml(donor.tipo_sanguineo || "-")}</span>
         </div>
         <div class="record-meta">
           <span><i data-lucide="map-pin"></i>${escapeHtml(donor.cidade || "-")} / ${escapeHtml(donor.estado || "-")}</span>
@@ -521,11 +626,11 @@ function renderDonorCard(donor) {
         </div>
         <div class="record-badges">
           ${demoBadge(donor)}
-          <span class="badge ${donor.ja_doador_sangue ? "positive" : "info"}">${donor.ja_doador_sangue ? "Ja doador" : "Interessado"}</span>
-          <span class="badge ${donor.quer_doar_medula ? "positive" : "info"}">Medula: ${yesNo(donor.quer_doar_medula)}</span>
-          <span class="badge ${donor.consentimento_contato === false ? "danger" : "positive"}">Contato: ${donor.consentimento_contato === false ? "Nao" : "Sim"}</span>
-          ${donor.opt_out ? `<span class="badge danger">Opt-out</span>` : ""}
-          <span class="badge ${donor.contato_whatsapp_realizado ? "positive" : "warning"}">${donor.contato_whatsapp_realizado ? "WhatsApp realizado" : "WhatsApp pendente"}</span>
+          <span class="badge ${donor.redome_status === 'cadastrado' ? "positive" : donor.redome_status === 'nao_cadastrado' ? "danger" : "info"}">Já é doador: ${redomeText}</span>
+          <span class="badge ${donor.medula_interest === 'sim' ? "positive" : donor.medula_interest === 'nao' ? "danger" : "info"}">Interesse em doar: ${interestText}</span>
+          <span class="badge ${donor.consent_lgpd === false ? "danger" : "positive"}">Contato: ${donor.consent_lgpd === false ? "Não autorizado" : "Autorizado"}</span>
+          <span class="badge info">Preferência: ${escapeHtml(donor.contact_preference || "Não informado")}</span>
+          <span class="badge info">Origem: ${escapeHtml(donor.origem || "-")}</span>
           <span class="badge ${statusClass(donor.status)}">${getDonorStatusLabel(donor.status)}</span>
         </div>
       </div>
@@ -535,6 +640,8 @@ function renderDonorCard(donor) {
           <span>Ver detalhes</span>
         </button>
         <button class="icon-button" type="button" title="WhatsApp" ${phoneAvailable ? "" : "disabled"} data-donor-whatsapp-id="${escapeHtml(donor.id)}"><i data-lucide="message-circle"></i></button>
+        <button class="icon-button" type="button" title="Copiar Telefone" onclick="navigator.clipboard.writeText('${escapeHtml(donor.telefone || '')}'); showToast('Telefone copiado!', 'success');"><i data-lucide="copy"></i></button>
+        <button class="icon-button" type="button" title="Copiar Email" ${donor.email ? "" : "disabled"} onclick="navigator.clipboard.writeText('${escapeHtml(donor.email || '')}'); showToast('Email copiado!', 'success');"><i data-lucide="mail"></i></button>
         <button class="icon-button" type="button" title="Editar" data-edit-entity="donor" data-id="${escapeHtml(donor.id)}"><i data-lucide="pencil"></i></button>
         <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="donor" data-id="${escapeHtml(donor.id)}" data-name="${escapeHtml(donor.nome || "doador")}"><i data-lucide="trash-2"></i></button>
       </div>
@@ -551,20 +658,19 @@ function renderPatientCard(patient) {
         <div class="record-title-row">
           <div>
             <strong>${escapeHtml(patient.nome_paciente || "-")}</strong>
-            <small>${escapeHtml(patient.hospital || "Hospital nao informado")}</small>
+            <small>${escapeHtml(patient.hospital || "Hospital não informado")}</small>
           </div>
-          <span class="blood-chip">${escapeHtml(patient.tipo_sanguineo || "-")}</span>
         </div>
         <div class="record-meta">
           <span><i data-lucide="map-pin"></i>${escapeHtml(patient.cidade || "-")} / ${escapeHtml(patient.estado || "-")}</span>
-          <span><i data-lucide="activity"></i>${escapeHtml(patient.diagnostico || "Necessidade nao informada")}</span>
-          <span><i data-lucide="user-round"></i>${escapeHtml(patient.nome_medico || "Medico nao informado")}</span>
+          <span><i data-lucide="activity"></i>${escapeHtml(patient.diagnostico || "Necessidade não informada")}</span>
+          <span><i data-lucide="user-round"></i>${escapeHtml(patient.nome_medico || "Médico não informado")}</span>
         </div>
         <div class="record-badges">
           ${demoBadge(patient)}
           <span class="badge ${patient.necessita_medula ? "positive" : "info"}">Medula: ${yesNo(patient.necessita_medula)}</span>
-          <span class="badge info">${escapeHtml(patient.tipo_necessidade || "Necessidade nao informada")}</span>
-          <span class="badge ${patient.urgencia === "alta" ? "danger" : patient.urgencia === "media" ? "warning" : "info"}">Urgencia: ${escapeHtml(patient.urgencia || "-")}</span>
+          <span class="badge info">${escapeHtml(patient.tipo_necessidade || "Necessidade não informada")}</span>
+          <span class="badge ${patient.urgencia === "alta" ? "danger" : patient.urgencia === "media" ? "warning" : "info"}">Urgência: ${escapeHtml(patient.urgencia || "-")}</span>
           <span class="badge ${patient.contato_whatsapp_realizado ? "positive" : "warning"}">${patient.contato_whatsapp_realizado ? "WhatsApp realizado" : "WhatsApp pendente"}</span>
           <span class="badge ${statusClass(patient.status)}">${getPatientStatusLabel(patient.status)}</span>
         </div>
@@ -574,11 +680,8 @@ function renderPatientCard(patient) {
           <i data-lucide="panel-right-open"></i>
           <span>Ver detalhes</span>
         </button>
-        <button class="action-button secondary" type="button" data-match-patient-id="${escapeHtml(patient.id)}">
-          <i data-lucide="search-check"></i>
-          <span>Encontrar doadores</span>
-        </button>
-        <button class="icon-button" type="button" title="WhatsApp responsavel" ${phoneAvailable ? "" : "disabled"} data-patient-whatsapp-id="${escapeHtml(patient.id)}"><i data-lucide="message-circle"></i></button>
+        <button class="icon-button" type="button" title="WhatsApp responsável" ${phoneAvailable ? "" : "disabled"} data-patient-whatsapp-id="${escapeHtml(patient.id)}"><i data-lucide="message-circle"></i></button>
+        <button class="icon-button" type="button" title="Copiar Telefone" onclick="navigator.clipboard.writeText('${escapeHtml(patient.telefone_responsavel || '')}'); showToast('Telefone copiado!', 'success');"><i data-lucide="copy"></i></button>
         <button class="icon-button" type="button" title="Editar" data-edit-entity="patient" data-id="${escapeHtml(patient.id)}"><i data-lucide="pencil"></i></button>
         <button class="icon-button soft-danger" type="button" title="Excluir" data-delete-entity="patient" data-id="${escapeHtml(patient.id)}" data-name="${escapeHtml(patient.nome_paciente || "paciente")}"><i data-lucide="trash-2"></i></button>
       </div>
@@ -587,6 +690,7 @@ function renderPatientCard(patient) {
 }
 
 function renderDonationCard(donation) {
+  const phoneAvailable = Boolean(getWhatsAppPhone(donation.phone || donation.telefone));
   const type = getDonationTypeLabel(donation);
 
   return `
@@ -595,20 +699,20 @@ function renderDonationCard(donation) {
         <div class="record-title-row">
           <div>
             <strong>${escapeHtml(donation.nome || "Apoiador sem nome")}</strong>
-            <small>${escapeHtml(donation.email || donation.telefone || "Contato nao informado")}</small>
+            <small>${escapeHtml(donation.email || donation.phone || donation.telefone || "Contato não informado")}</small>
           </div>
           <span class="amount-chip">${formatCurrency(donation.valor)}</span>
         </div>
         <div class="record-meta">
           <span><i data-lucide="credit-card"></i>${escapeHtml(donation.metodo_pagamento || "-")}</span>
           <span><i data-lucide="calendar"></i>${formatDate(donation.created_at)}</span>
-          <span><i data-lucide="phone"></i>${escapeHtml(donation.telefone || "-")}</span>
+          <span><i data-lucide="phone"></i>${escapeHtml(donation.phone || donation.telefone || "-")}</span>
         </div>
         <div class="record-badges">
           ${demoBadge(donation)}
           <span class="badge ${statusClass(donation.status_pagamento)}">${getPaymentStatusLabel(donation.status_pagamento)}</span>
-          <span class="badge info">${escapeHtml(type)}</span>
-          <span class="badge ${isRecurringDonation(donation) ? "positive" : "info"}">${isRecurringDonation(donation) ? "Recorrente" : "Apoio unico"}</span>
+          <span class="badge info">Tipo: ${escapeHtml(type)}</span>
+          <span class="badge ${isRecurringDonation(donation) ? "positive" : "info"}">${isRecurringDonation(donation) ? "Recorrente" : "Apoio único"}</span>
         </div>
       </div>
       <div class="record-actions">
@@ -616,6 +720,9 @@ function renderDonationCard(donation) {
           <i data-lucide="panel-right-open"></i>
           <span>Ver detalhes</span>
         </button>
+        <button class="icon-button" type="button" title="WhatsApp" ${phoneAvailable ? "" : "disabled"} data-donor-whatsapp-id="${escapeHtml(donation.id)}"><i data-lucide="message-circle"></i></button>
+        <button class="icon-button" type="button" title="Copiar Telefone" onclick="navigator.clipboard.writeText('${escapeHtml(donation.phone || donation.telefone || '')}'); showToast('Telefone copiado!', 'success');"><i data-lucide="copy"></i></button>
+        <button class="icon-button" type="button" title="Copiar Email" ${donation.email ? "" : "disabled"} onclick="navigator.clipboard.writeText('${escapeHtml(donation.email || '')}'); showToast('Email copiado!', 'success');"><i data-lucide="mail"></i></button>
       </div>
     </article>
   `;
@@ -889,12 +996,27 @@ function getDisplayDonations() {
 
 function getFilteredDonors() {
   return getGlobalDonors().filter((donor) => {
-    const marrow = state.donorFilters.quer_doar_medula;
+    // 1. Filtro da sub-aba de segmento
+    const segment = state.donorFilters.segment || "all";
+    if (segment === "ja_doadores" && donor.redome_status !== "cadastrado") return false;
+    if (segment === "ainda_nao" && donor.redome_status !== "nao_cadastrado") return false;
+    if (segment === "interessados" && donor.medula_interest !== "sim") return false;
+    if (segment === "sem_interesse" && donor.medula_interest !== "nao") return false;
+    if (segment === "nao_informado") {
+      const isRedomeUnk = !donor.redome_status || donor.redome_status === "nao_informado";
+      const isInterestUnk = !donor.medula_interest || donor.medula_interest === "nao_informado";
+      if (!isRedomeUnk && !isInterestUnk) return false;
+    }
+
+    // 2. Filtros de campo selecionado
+    const redome = state.donorFilters.redome_status;
+    const interest = state.donorFilters.medula_interest;
     const whatsapp = state.donorFilters.contato_whatsapp;
+
     return (!state.donorFilters.estado || donor.estado === state.donorFilters.estado)
-      && (!state.donorFilters.tipo_sanguineo || donor.blood_donor_status === state.donorFilters.tipo_sanguineo)
+      && (!redome || donor.redome_status === redome)
+      && (!interest || donor.medula_interest === interest)
       && (!state.donorFilters.status || donor.status === state.donorFilters.status)
-      && (!marrow || donor.quer_doar_medula === (marrow === "sim"))
       && (!whatsapp || donor.contato_whatsapp_realizado === (whatsapp === "realizado"));
   });
 }
@@ -946,10 +1068,7 @@ function matchesDonationFilter(donation) {
 function populateFilters() {
   const donors = getDisplayDonors();
   setOptions("donorStateFilter", uniqueSorted(donors, "estado"), "Todos os estados");
-  setOptions("donorBloodFilter", uniqueSorted(donors, "blood_donor_status"), "Todos os perfis");
   setOptions("donorStatusFilter", uniqueSorted(donors, "status"), "Todos os status", getDonorStatusLabel);
-  setOptions("reportStateFilter", uniqueSorted(donors, "estado"), "Todos os estados");
-  setOptions("reportBloodFilter", uniqueSorted(donors, "tipo_sanguineo"), "Todos os tipos");
 }
 
 function setOptions(id, values, placeholder, labelFn = (value) => value) {
@@ -977,17 +1096,7 @@ function renderRanking(id, entries) {
 }
 
 function renderActiveCharts() {
-  if (state.activeTab === "overview") {
-    renderOverviewCharts(getGlobalDonors(), getGlobalPatients(), getGlobalDonations());
-  }
-
-  if (state.activeTab === "donations") {
-    renderDonationChart(getGlobalDonations());
-  }
-
-  if (state.activeTab === "regions") {
-    renderRegionCharts(getGlobalDonors(), getGlobalPatients());
-  }
+  // Desativado: gráficos Canvas substituídos por painéis responsivos HTML
 }
 
 function handleClickActions(event) {

@@ -43,10 +43,13 @@
       </div>
 
       <nav class="nav-list" aria-label="Navegação principal">
+        <div class="sidebar-header">Visão</div>
         <button class="nav-item active" type="button" data-tab="overview">
           <i data-lucide="layout-dashboard"></i>
           <span>Visão Geral</span>
         </button>
+
+        <div class="sidebar-header">Cadastros</div>
         <button class="nav-item" type="button" data-tab="donors">
           <i data-lucide="users"></i>
           <span>Doadores</span>
@@ -56,24 +59,18 @@
           <span>Pacientes</span>
         </button>
         <button class="nav-item" type="button" data-tab="donations">
-          <i data-lucide="dollar-sign"></i>
-          <span>Apoio financeiro</span>
+          <i data-lucide="heart"></i>
+          <span>Apoie</span>
         </button>
-        <button class="nav-item" type="button" data-tab="support">
-          <i data-lucide="phone"></i>
-          <span>Contatos de apoio</span>
-        </button>
-        <button class="nav-item" type="button" data-tab="matching">
-          <i data-lucide="search-check"></i>
-          <span>Pareamento</span>
-        </button>
+
+        <div class="sidebar-header">Sistema</div>
         <button class="nav-item" type="button" data-tab="audit">
           <i data-lucide="file-text"></i>
           <span>Auditoria</span>
         </button>
-        <button class="nav-item" type="button" data-tab="cms">
-          <i data-lucide="external-link"></i>
-          <span>Gestão do site</span>
+        <button class="nav-item" type="button" id="btnSidebarLogout">
+          <i data-lucide="log-out"></i>
+          <span>Sair</span>
         </button>
       </nav>
 
@@ -140,7 +137,7 @@
 
           <div class="metrics-grid" id="overviewMetrics"></div>
 
-          <article class="card span-2" id="cardRecentRegistrations" style="grid-column: span 2; margin-bottom: 24px;">
+          <article class="card" id="cardRecentRegistrations" style="margin-bottom: 24px;">
             <div class="card-header" style="margin-bottom: 16px;">
               <h3>Registros recentes</h3>
             </div>
@@ -159,53 +156,30 @@
             </div>
           </article>
 
-          <div class="charts-grid">
-            <article class="card chart-card span-2">
-              <div class="card-header">
-                <h3>Cadastros por dia</h3>
+          <article class="card">
+            <div class="card-header" style="margin-bottom: 16px;">
+              <h3>Resumo do Funil de Medula</h3>
+            </div>
+            <div class="funnel-container" id="overviewFunnel">
+              <!-- Renderizado dinamicamente via JavaScript -->
+            </div>
+          </article>
+
+          <div class="geo-summary-grid">
+            <article class="card">
+              <div class="card-header" style="margin-bottom: 16px;">
+                <h3>Distribuição Geográfica - Doadores</h3>
               </div>
-              <div class="chart-box">
-                <canvas id="chartRegistrations"></canvas>
-              </div>
-            </article>
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Doadores x não doadores</h3>
-              </div>
-              <div class="chart-box">
-                <canvas id="chartBloodDonors"></canvas>
-              </div>
-            </article>
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Interesse em medula</h3>
-              </div>
-              <div class="chart-box">
-                <canvas id="chartMarrowInterest"></canvas>
+              <div class="geo-list" id="donorsGeoList">
+                <!-- Renderizado dinamicamente via JavaScript -->
               </div>
             </article>
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Pacientes por status</h3>
+            <article class="card">
+              <div class="card-header" style="margin-bottom: 16px;">
+                <h3>Distribuição Geográfica - Pacientes</h3>
               </div>
-              <div class="chart-box">
-                <canvas id="chartPatientStatus"></canvas>
-              </div>
-            </article>
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Doações por período</h3>
-              </div>
-              <div class="chart-box">
-                <canvas id="chartDonationPeriod"></canvas>
-              </div>
-            </article>
-            <article class="card chart-card">
-              <div class="card-header">
-                <h3>Estados com mais doadores</h3>
-              </div>
-              <div class="chart-box">
-                <canvas id="chartOverviewStates"></canvas>
+              <div class="geo-list" id="patientsGeoList">
+                <!-- Renderizado dinamicamente via JavaScript -->
               </div>
             </article>
           </div>
@@ -219,25 +193,41 @@
             </div>
           </div>
 
+          <div class="segment-tabs" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+            <button class="action-button active" type="button" data-segment="all" style="min-height: 38px; border-radius: 99px; padding: 0 16px; font-weight: 700; font-size: 0.85rem;">Todos</button>
+            <button class="action-button secondary" type="button" data-segment="ja_doadores" style="min-height: 38px; border-radius: 99px; padding: 0 16px; font-weight: 700; font-size: 0.85rem;">Já são doadores</button>
+            <button class="action-button secondary" type="button" data-segment="interessados" style="min-height: 38px; border-radius: 99px; padding: 0 16px; font-weight: 700; font-size: 0.85rem;">Interessados em doar</button>
+            <button class="action-button secondary" type="button" data-segment="ainda_nao" style="min-height: 38px; border-radius: 99px; padding: 0 16px; font-weight: 700; font-size: 0.85rem;">Ainda não são doadores</button>
+            <button class="action-button secondary" type="button" data-segment="sem_interesse" style="min-height: 38px; border-radius: 99px; padding: 0 16px; font-weight: 700; font-size: 0.85rem;">Sem interesse</button>
+            <button class="action-button secondary" type="button" data-segment="nao_informado" style="min-height: 38px; border-radius: 99px; padding: 0 16px; font-weight: 700; font-size: 0.85rem;">Não informado</button>
+          </div>
+
           <div class="filters-grid donor-filters-grid">
             <label>
               <span>Estado</span>
               <select id="donorStateFilter"></select>
             </label>
             <label>
-              <span>Tipo sanguíneo</span>
-              <select id="donorBloodFilter"></select>
+              <span>Status REDOME</span>
+              <select id="donorRedomeFilter">
+                <option value="">Todos</option>
+                <option value="cadastrado">Sim (Cadastrado)</option>
+                <option value="nao_cadastrado">Não cadastrado</option>
+                <option value="nao_informado">Não informado</option>
+              </select>
             </label>
             <label>
               <span>Interesse em medula</span>
               <select id="donorMarrowFilter">
                 <option value="">Todos</option>
-                <option value="sim">Quer doar</option>
-                <option value="nao">Não quer doar</option>
+                <option value="sim">Sim (Tem interesse)</option>
+                <option value="nao">Não tem interesse</option>
+                <option value="quero_saber">Quero saber mais</option>
+                <option value="nao_informado">Não informado</option>
               </select>
             </label>
             <label>
-              <span>Status</span>
+              <span>Status Operacional</span>
               <select id="donorStatusFilter"></select>
             </label>
             <label>
@@ -317,11 +307,11 @@
           <div class="record-list" id="patientsList"></div>
         </section>
 
-        <section class="tab-panel" id="tab-donations" data-title="Doações" data-kicker="Arrecadação monetária">
+        <section class="tab-panel" id="tab-donations" data-title="Cadastros do Apoie" data-kicker="Apoio e engajamento">
           <div class="section-heading">
             <div>
-              <h2>Doações monetárias</h2>
-              <p>Arrecadação carregada a partir do Supabase</p>
+              <h2>Pessoas cadastradas</h2>
+              <p>Registros carregados a partir de donation_intents</p>
             </div>
           </div>
 
@@ -329,28 +319,15 @@
 
           <div class="filters-grid donation-filters-grid">
             <label>
-              <span>Filtro financeiro</span>
+              <span>Filtro por Método</span>
               <select id="donationTypeFilter">
                 <option value="">Todos</option>
                 <option value="pix">Pix</option>
-                <option value="cartao">Cartao</option>
+                <option value="cartao">Cartão</option>
                 <option value="plataforma">Plataforma</option>
-                <option value="recorrente">Recorrente</option>
-                <option value="pendente">Pendente</option>
-                <option value="confirmado">Confirmado</option>
-                <option value="redirecionado">Redirecionado</option>
               </select>
             </label>
           </div>
-
-          <article class="card chart-card">
-            <div class="card-header">
-              <h3>Arrecadação por período</h3>
-            </div>
-            <div class="chart-box">
-              <canvas id="chartDonationTab"></canvas>
-            </div>
-          </article>
 
           <article class="card table-card">
             <div class="table-wrap">
@@ -371,94 +348,7 @@
               </table>
             </div>
           </article>
-          <div class="donation-workspace">
-            <section class="record-list" id="donationsList"></section>
-            <aside class="supporter-ranking-card" id="supporterRanking"></aside>
-          </div>
-        </section>
-
-        <section class="tab-panel" id="tab-support" data-title="Contatos de apoio" data-kicker="Leads de suporte">
-          <div class="section-heading">
-            <div>
-              <h2>Contatos de apoio</h2>
-              <p id="supportResultCount">0 registros</p>
-            </div>
-          </div>
-
-          <div class="filters-grid support-filters-grid">
-            <label>
-              <span>Tipo de Interesse</span>
-              <select id="supportInterestFilter">
-                <option value="">Todos</option>
-                <option value="financeiro">Apoio Financeiro</option>
-                <option value="divulgacao">Divulgação / Voluntariado</option>
-                <option value="cadastro_doador">Doador de Medula / Sangue</option>
-              </select>
-            </label>
-            <label>
-              <span>Status</span>
-              <select id="supportStatusFilter">
-                <option value="">Todos</option>
-                <option value="novo">Novo</option>
-                <option value="contatado">Contatado</option>
-                <option value="arquivado">Arquivado</option>
-              </select>
-            </label>
-            <button class="action-button ghost" type="button" id="btnClearSupportFilters">
-              <i data-lucide="x"></i>
-              <span>Limpar</span>
-            </button>
-          </div>
-
-          <article class="card table-card">
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Telefone</th>
-                    <th>Email</th>
-                    <th>Tipo de Interesse</th>
-                    <th>Campanha</th>
-                    <th>Origem</th>
-                    <th>Status</th>
-                    <th>Data</th>
-                    <th>Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="supportTableBody"></tbody>
-              </table>
-            </div>
-          </article>
-          <div class="record-list" id="supportList"></div>
-        </section>
-
-        <section class="tab-panel" id="tab-matching" data-title="Pareamento de doadores" data-kicker="Cruzamento operacional de compatibilidade">
-          <div class="section-heading">
-            <div>
-              <h2>Pareamento de doadores</h2>
-              <p>Selecione um paciente para buscar doadores compatíveis na rede</p>
-            </div>
-          </div>
-
-          <div class="matching-workspace-layout">
-            <aside class="matching-sidebar-card card">
-              <div class="card-header">
-                <h3>Pacientes</h3>
-              </div>
-              <div class="matching-patients-search">
-                <input type="search" id="matchingPatientSearch" placeholder="Filtrar pacientes...">
-              </div>
-              <ul class="matching-patient-list" id="matchingPatientList"></ul>
-            </aside>
-            <main class="matching-main-area" id="matchingMainArea">
-              <div class="matching-empty">
-                <i data-lucide="search-check" style="width:48px; height:48px; opacity:0.5; margin-bottom:12px; display:block; margin-left:auto; margin-right:auto;"></i>
-                <strong>Nenhum paciente selecionado</strong>
-                <p>Selecione um paciente da lista lateral para visualizar os doadores recomendados por compatibilidade, localização e disponibilidade.</p>
-              </div>
-            </main>
-          </div>
+          <div class="record-list" id="donationsList"></div>
         </section>
 
         <section class="tab-panel" id="tab-audit" data-title="Auditoria administrativa" data-kicker="Logs de eventos do sistema">

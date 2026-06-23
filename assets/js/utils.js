@@ -120,7 +120,7 @@ export function getPatientStatusLabel(status) {
 
 export function getPaymentStatusLabel(status) {
   const newSchemaLabels = {
-    pending_payment_setup: "Aguardando configuracao",
+    pending_payment_setup: "Cadastro recebido",
     paid: "Pago",
     failed: "Falhou",
     canceled: "Cancelado"
