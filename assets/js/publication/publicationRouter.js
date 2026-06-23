@@ -396,6 +396,10 @@ function buildFormFieldsMarkup(item) {
 
           <div class="media-widget-actions">
             <button type="button" class="action-button secondary compact-btn" id="btnOpenMediaPicker">Escolher da Biblioteca</button>
+            <label class="action-button secondary compact-btn" style="display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin: 0;">
+              <input type="file" id="formDirectFileInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
+              <span id="formDirectUploadSpan">Enviar Imagem</span>
+            </label>
             <button type="button" class="action-button ghost danger-text compact-btn" id="btnRemoveMediaAsset">Remover</button>
           </div>
         </div>

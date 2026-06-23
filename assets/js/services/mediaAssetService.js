@@ -14,7 +14,18 @@ export function listMediaAssetLibrary({ assetUsage = "" } = {}) {
   });
 }
 
-export function createMediaAsset(payload) {
+export async function createMediaAsset(payload) {
+  if (payload.cloudinary_public_id) {
+    const existing = await fetchTable("media_assets", {
+      filters: {
+        cloudinary_public_id: payload.cloudinary_public_id,
+        active: true
+      }
+    });
+    if (!existing.error && existing.data?.length) {
+      return existing.data[0];
+    }
+  }
   return insertRecord("media_assets", payload, "Nao foi possivel registrar o asset de midia.");
 }
 

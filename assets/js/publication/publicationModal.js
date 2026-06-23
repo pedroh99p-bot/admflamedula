@@ -70,11 +70,13 @@ export function openPublicationModal({ title, kicker, bodyMarkup }) {
 
   const removeBtn = document.getElementById("btnRemoveMediaAsset");
   const pickerBtn = document.getElementById("btnOpenMediaPicker");
+  const directInput = document.getElementById("formDirectFileInput");
   
   if (removeBtn && pickerBtn) {
     if (isViewer) {
       removeBtn.style.display = "none";
       pickerBtn.style.display = "none";
+      if (directInput) directInput.parentNode.style.display = "none";
     } else {
       pickerBtn.addEventListener("click", () => {
         const formType = publicationState.activeType;
@@ -88,6 +90,65 @@ export function openPublicationModal({ title, kicker, bodyMarkup }) {
         document.getElementById("formNoMediaBox").style.display = "flex";
         document.getElementById("formMediaDetails").innerHTML = "";
       });
+
+      if (directInput) {
+        directInput.addEventListener("change", async (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          const formType = publicationState.activeType;
+          const target = formType === "hero_news" ? "hero" : formType === "actions" ? "actions" : "media";
+          const span = document.getElementById("formDirectUploadSpan");
+
+          if (span) span.textContent = "Enviando...";
+          document.getElementById("btnSaveDraft").disabled = true;
+          document.getElementById("btnSavePublish").disabled = true;
+
+          try {
+            const { uploadSignedMediaAsset } = await import("../services/cloudinaryService.js");
+            const result = await uploadSignedMediaAsset({
+              file,
+              target,
+              resourceType: "image",
+              displayName: file.name,
+              altText: "",
+              assetType: formType
+            });
+
+            showToast("Upload concluído com sucesso!");
+
+            // Atualizar o preview no formulário
+            publicationState.selectedAsset = result.mediaAsset;
+            const previewImg = document.getElementById("formMediaPreviewImg");
+            const previewBox = document.getElementById("formMediaPreviewBox");
+            const noMediaBox = document.getElementById("formNoMediaBox");
+            const detailsNode = document.getElementById("formMediaDetails");
+
+            if (previewImg && previewBox && noMediaBox) {
+              previewImg.src = result.mediaAsset.card_url || result.mediaAsset.webp_url || result.mediaAsset.delivery_url || result.mediaAsset.secure_url || "";
+              previewBox.style.display = "flex";
+              noMediaBox.style.display = "none";
+            }
+
+            if (detailsNode) {
+              detailsNode.innerHTML = `
+                <strong>${result.mediaAsset.display_name || result.mediaAsset.original_filename}</strong>
+                <span>${result.mediaAsset.folder || ""}</span>
+                <span>${result.mediaAsset.width}x${result.mediaAsset.height}px</span>
+              `;
+            }
+          } catch (err) {
+            console.error(err);
+            const { showToast } = await import("../toast.js");
+            showToast(err.message || "Erro durante o upload.", "error");
+          } finally {
+            if (span) span.textContent = "Enviar Imagem";
+            document.getElementById("btnSaveDraft").disabled = false;
+            document.getElementById("btnSavePublish").disabled = false;
+            e.target.value = "";
+          }
+        });
+      }
     }
   }
 
