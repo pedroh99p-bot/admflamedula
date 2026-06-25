@@ -8,6 +8,9 @@ export const publicationState = {
   editingId: null,
   formData: {},
   selectedAsset: null,
+  pendingMediaRegistration: null,
+  uploadStatus: "idle",
+  uploadError: "",
   saving: false,
   role: "viewer", // 'owner', 'editor', 'viewer'
   page: 1,
@@ -21,5 +24,8 @@ export function resetPublicationEditorState() {
   publicationState.editingId = null;
   publicationState.formData = {};
   publicationState.selectedAsset = null;
+  publicationState.pendingMediaRegistration = null;
+  publicationState.uploadStatus = "idle";
+  publicationState.uploadError = "";
   publicationState.saving = false;
 }

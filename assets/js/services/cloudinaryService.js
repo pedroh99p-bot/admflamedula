@@ -3,6 +3,7 @@ import { createMediaAsset } from "./mediaAssetService.js";
 
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
+const ALLOWED_TARGETS = new Set(["hero", "actions", "media", "team", "testimonials", "branding"]);
 const IMAGE_TYPES = {
   "image/jpeg": new Set(["jpg", "jpeg"]),
   "image/png": new Set(["png"]),
@@ -12,6 +13,29 @@ const VIDEO_TYPES = {
   "video/mp4": new Set(["mp4"]),
   "video/webm": new Set(["webm"])
 };
+
+export class MediaAssetRegistrationError extends Error {
+  constructor(message, retryContext, cause) {
+    super(message);
+    this.name = "MediaAssetRegistrationError";
+    this.retryContext = retryContext;
+    this.cause = cause;
+  }
+}
+
+export function isMediaAssetRegistrationError(error) {
+  return error?.name === "MediaAssetRegistrationError";
+}
+
+function notifyProgress(callback, status) {
+  if (typeof callback === "function") callback(status);
+}
+
+function validateUploadTarget(target) {
+  if (!ALLOWED_TARGETS.has(target)) {
+    throw new Error("Destino de upload invalido.");
+  }
+}
 
 function getFunctionUrl() {
   const { SUPABASE_URL } = window.FLAMEDULA_CONFIG || {};
@@ -49,10 +73,12 @@ function getFileExtension(filename) {
   return String(filename || "").split(".").pop()?.toLowerCase() || "";
 }
 
-export async function requestCloudinarySignature({ target, resourceType }) {
+export async function requestCloudinarySignature({ target, resourceType, onProgress } = {}) {
+  validateUploadTarget(target);
+  notifyProgress(onProgress, "signing");
   const session = await getSession();
   if (!session?.access_token) {
-    throw new Error("Sessao administrativa ausente.");
+    throw new Error("Sessao expirada. Entre novamente no ADM.");
   }
 
   const response = await fetch(getFunctionUrl(), {
@@ -66,13 +92,31 @@ export async function requestCloudinarySignature({ target, resourceType }) {
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.error || "Nao foi possivel gerar assinatura Cloudinary.");
+    console.error("[Cloudinary:signing]", {
+      status: response.status,
+      message: body.error || "signature_failed"
+    });
+    if (response.status === 401) throw new Error("Sessao expirada ao gerar assinatura.");
+    if (response.status === 403) throw new Error("Sem permissao para enviar midias.");
+    throw new Error(body.error || "Falha ao gerar assinatura Cloudinary.");
+  }
+
+  if (body.target && body.target !== target) {
+    throw new Error("Assinatura retornou destino diferente do solicitado.");
+  }
+  if (body.resourceType !== resourceType) {
+    throw new Error("Assinatura retornou tipo de recurso diferente do solicitado.");
+  }
+  validateUploadTarget(body.target || target);
+  if (!body.cloudName || !body.apiKey || !body.timestamp || !body.signature || !body.folder) {
+    throw new Error("Assinatura Cloudinary incompleta.");
   }
 
   return body;
 }
 
-export async function uploadToCloudinary(file, signaturePayload) {
+export async function uploadToCloudinary(file, signaturePayload, onProgress) {
+  notifyProgress(onProgress, "uploading");
   const formData = new FormData();
   formData.append("file", file);
   formData.append("api_key", signaturePayload.apiKey);
@@ -95,7 +139,11 @@ export async function uploadToCloudinary(file, signaturePayload) {
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.error?.message || "Upload Cloudinary falhou.");
+    console.error("[Cloudinary:uploading]", {
+      status: response.status,
+      message: body.error?.message || "upload_failed"
+    });
+    throw new Error(body.error?.message || "Erro Cloudinary durante upload.");
   }
 
   return body;
@@ -157,38 +205,45 @@ export function getMediaAssetThumbnailUrl(asset) {
     || "";
 }
 
-export async function uploadSignedMediaAsset({
-  file,
+export async function registerUploadedMediaAsset({
+  upload,
   target = "media",
   resourceType = "image",
+  folder = "",
+  fileName = "",
+  fileSize = 0,
   displayName = "",
   altText = "",
-  assetType = ""
+  assetType = "",
+  uploadedBy = null,
+  onProgress
 }) {
-  validateUploadFile(file, resourceType);
-  const session = await getSession();
-  const signature = await requestCloudinarySignature({ target, resourceType });
-  const upload = await uploadToCloudinary(file, signature);
-  const optimizedFields = getOptimizedUploadFields(upload, signature, resourceType);
-  const originalExtension = getFileExtension(upload.original_filename || file.name);
+  validateUploadTarget(target);
+  notifyProgress(onProgress, "saving_asset");
+  if (!upload?.public_id || !upload?.secure_url) {
+    throw new Error("Resposta Cloudinary sem identificador de midia.");
+  }
 
-  const mediaAsset = await createMediaAsset({
+  const optimizedFields = getOptimizedUploadFields(upload, { resourceType }, resourceType);
+  const originalExtension = getFileExtension(upload.original_filename || fileName);
+
+  const payload = {
     cloudinary_public_id: upload.public_id,
     secure_url: upload.secure_url,
-    resource_type: signature.resourceType,
+    resource_type: resourceType,
     asset_type: assetType || target,
     asset_usage: target,
-    folder: signature.folder,
-    original_filename: upload.original_filename || file.name,
-    display_name: displayName || upload.original_filename || file.name,
+    folder,
+    original_filename: upload.original_filename || fileName,
+    display_name: displayName || upload.original_filename || fileName,
     alt_text: altText,
     format: upload.format,
     width: upload.width || null,
     height: upload.height || null,
     duration: upload.duration || null,
-    bytes: upload.bytes || file.size,
+    bytes: upload.bytes || fileSize,
     version: upload.version || null,
-    uploaded_by: session?.user?.id || null,
+    uploaded_by: uploadedBy,
     delivery_url: optimizedFields.delivery_url,
     webp_url: optimizedFields.webp_url,
     card_url: optimizedFields.card_url,
@@ -202,9 +257,63 @@ export async function uploadSignedMediaAsset({
       original_extension: originalExtension,
       eager_count: optimizedFields.eager_count,
       upload_source: "adm",
-      target: signature.target || target
+      target
     }
-  });
+  };
 
+  const mediaAsset = await createMediaAsset(payload);
+  if (!mediaAsset?.id) {
+    throw new Error("media_assets nao retornou id do asset.");
+  }
+  return mediaAsset;
+}
+
+export async function uploadSignedMediaAsset({
+  file,
+  target = "media",
+  resourceType = "image",
+  displayName = "",
+  altText = "",
+  assetType = "",
+  onProgress
+}) {
+  notifyProgress(onProgress, "validating");
+  validateUploadTarget(target);
+  validateUploadFile(file, resourceType);
+  const session = await getSession();
+  const signature = await requestCloudinarySignature({ target, resourceType, onProgress });
+  const upload = await uploadToCloudinary(file, signature, onProgress);
+  const registrationContext = {
+    upload,
+    target: signature.target || target,
+    resourceType: signature.resourceType || resourceType,
+    folder: signature.folder,
+    fileName: file.name,
+    fileSize: file.size,
+    displayName,
+    altText,
+    assetType,
+    uploadedBy: session?.user?.id || null
+  };
+
+  let mediaAsset;
+  try {
+    mediaAsset = await registerUploadedMediaAsset({
+      ...registrationContext,
+      onProgress
+    });
+  } catch (error) {
+    console.error("[Cloudinary:saving_asset]", {
+      status: error?.status || error?.code || "failed",
+      message: error?.message || "media_asset_registration_failed"
+    });
+    throw new MediaAssetRegistrationError(
+      "A imagem foi enviada, mas nao foi registrada no painel.",
+      registrationContext,
+      error
+    );
+  }
+
+  notifyProgress(onProgress, "ready");
   return { upload, mediaAsset, signature };
 }

@@ -8,6 +8,13 @@ import {
   deletePublicationItem
 } from "../services/publicationService.js";
 import { showToast } from "../toast.js";
+import {
+  applyAssetToPayload,
+  getPreferredAssetUrl,
+  isPublicationUploadBusy,
+  normalizeMediaItemPayload,
+  syncPublicationUploadControls
+} from "./publicationMedia.js";
 
 let initialized = false;
 
@@ -248,7 +255,14 @@ function openEditForm(id) {
   publicationState.editorMode = "edit";
   publicationState.editingId = id;
   publicationState.formData = { ...item };
-  publicationState.selectedAsset = item.image_asset_id ? { id: item.image_asset_id, card_url: item.image_url } : null;
+  publicationState.selectedAsset = item.image_asset_id ? {
+    id: item.image_asset_id,
+    card_url: item.image_url,
+    image_url: item.image_url,
+    thumbnail_url: item.thumbnail_url,
+    cloudinary_public_id: item.cloudinary_public_id,
+    alt_text: item.image_alt
+  } : null;
 
   const typeLabel = publicationState.activeType === "hero_news" ? "Hero" : publicationState.activeType === "actions" ? "Ação" : "Mídia";
   const bodyMarkup = buildFormFieldsMarkup(item);
@@ -372,7 +386,7 @@ function buildFormFieldsMarkup(item) {
   }
 
   const hasMedia = Boolean(publicationState.selectedAsset || item.image_url);
-  const mediaUrl = publicationState.selectedAsset?.card_url || item.image_url || "";
+  const mediaUrl = getPreferredAssetUrl(publicationState.selectedAsset) || item.image_url || item.thumbnail_url || "";
 
   return `
     <div class="form-grid">
@@ -401,6 +415,7 @@ function buildFormFieldsMarkup(item) {
               <span id="formDirectUploadSpan">Enviar Imagem</span>
             </label>
             <button type="button" class="action-button ghost danger-text compact-btn" id="btnRemoveMediaAsset">Remover</button>
+            <button type="button" class="action-button secondary compact-btn" id="btnRetryMediaRegistration" hidden>Tentar registrar novamente</button>
           </div>
         </div>
 
@@ -416,6 +431,8 @@ function buildFormFieldsMarkup(item) {
 export function bindFormSubmitEvent() {
   const form = document.getElementById("editorialModalForm");
   if (!form) return;
+  if (form.dataset.submitBound === "true") return;
+  form.dataset.submitBound = "true";
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -427,6 +444,10 @@ export function bindFormSubmitEvent() {
 async function handleSaveForm(isPublish) {
   const form = document.getElementById("editorialModalForm");
   if (!form) return;
+  if (publicationState.saving || isPublicationUploadBusy()) {
+    showToast("Aguarde o envio da imagem terminar antes de salvar.", "error");
+    return;
+  }
 
   const titleInput = form.querySelector("[name='title']");
   if (!titleInput || !titleInput.value.trim()) {
@@ -435,7 +456,6 @@ async function handleSaveForm(isPublish) {
     return;
   }
 
-  const formData = new FormData(form);
   const payload = {
     title: titleInput.value.trim(),
     image_alt: form.querySelector("[name='image_alt']")?.value || null,
@@ -461,30 +481,37 @@ async function handleSaveForm(isPublish) {
     payload.type = form.querySelector("[name='type']")?.value || null;
     payload.category = form.querySelector("[name='category']")?.value || null;
     payload.url = form.querySelector("[name='url']")?.value || null;
+    payload.youtube_id = null;
   }
 
   // Associar imagem do Cloudinary
   if (publicationState.selectedAsset) {
-    payload.image_asset_id = publicationState.selectedAsset.id;
-    payload.image_url = publicationState.selectedAsset.secure_url || publicationState.selectedAsset.delivery_url || "";
+    applyAssetToPayload(payload, publicationState.selectedAsset, activeType);
   } else {
     // Se removeu a imagem
     const previewBox = document.getElementById("formMediaPreviewBox");
     if (previewBox && previewBox.style.display === "none") {
       payload.image_asset_id = null;
       payload.image_url = null;
+      payload.cloudinary_public_id = null;
+      if (activeType === "media_items") payload.thumbnail_url = null;
     }
   }
 
+  const finalPayload = activeType === "media_items"
+    ? normalizeMediaItemPayload(payload)
+    : payload;
+
   const table = getTableFromType(activeType);
   publicationState.saving = true;
+  syncPublicationUploadControls();
 
   try {
     if (publicationState.editorMode === "edit") {
-      await updatePublicationItem(table, publicationState.editingId, payload);
+      await updatePublicationItem(table, publicationState.editingId, finalPayload);
       showToast("Registro atualizado com sucesso!");
     } else {
-      await createPublicationItem(table, payload);
+      await createPublicationItem(table, finalPayload);
       showToast("Registro criado com sucesso!");
     }
 
@@ -495,6 +522,7 @@ async function handleSaveForm(isPublish) {
     showToast(err.message || "Erro ao salvar o registro.", "error");
   } finally {
     publicationState.saving = false;
+    syncPublicationUploadControls();
   }
 }
 

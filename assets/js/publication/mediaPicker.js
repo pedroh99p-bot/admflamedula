@@ -1,7 +1,16 @@
 import { listMediaAssetLibrary } from "../services/mediaAssetService.js";
-import { uploadSignedMediaAsset } from "../services/cloudinaryService.js";
-import { publicationState } from "./publicationState.js";
+import { uploadSignedMediaAsset, isMediaAssetRegistrationError } from "../services/cloudinaryService.js";
 import { showToast } from "../toast.js";
+import {
+  applySelectedPublicationAsset,
+  getAssetThumbnailUrl,
+  getPublicationTarget,
+  isPublicationUploadBusy,
+  setPublicationUploadStatus,
+  showPendingMediaRegistration,
+  syncPublicationUploadControls
+} from "./publicationMedia.js";
+import { publicationState } from "./publicationState.js";
 
 let libraryItems = [];
 let libraryLoading = false;
@@ -10,6 +19,7 @@ const libraryPageSize = 24;
 let libraryHasMore = false;
 let searchTimeout = null;
 let currentSearch = "";
+let currentTargetUsage = "media";
 
 export function ensureMediaPicker() {
   if (document.getElementById("editorialMediaPicker")) return;
@@ -24,29 +34,27 @@ export function ensureMediaPicker() {
       <header class="editorial-media-picker-header">
         <div>
           <p class="eyebrow">Biblioteca Cloudinary</p>
-          <h2 id="mediaPickerTitle">Selecionar Imagem</h2>
+          <h2 id="mediaPickerTitle">Selecionar imagem</h2>
         </div>
         <button class="icon-button" type="button" id="btnMediaPickerClose" aria-label="Fechar biblioteca">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
         </button>
       </header>
-      
+
       <div class="media-picker-toolbar">
         <input type="search" id="mediaPickerSearch" placeholder="Buscar por nome da imagem..." class="search-input">
         <label class="upload-btn">
           <input type="file" id="mediaPickerFileInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
-          <span>Fazer Upload</span>
+          <span>Fazer upload</span>
         </label>
       </div>
 
       <div class="editorial-media-picker-body" id="mediaPickerGridBody"></div>
-
       <footer class="media-picker-pagination" id="mediaPickerPagination"></footer>
     </section>
   `;
   document.body.appendChild(modal);
 
-  // Eventos de fechar
   document.getElementById("btnMediaPickerClose").addEventListener("click", closeMediaPicker);
   document.getElementById("btnMediaPickerCloseBackdrop").addEventListener("click", closeMediaPicker);
   document.getElementById("mediaPickerFileInput").addEventListener("change", handleDirectUpload);
@@ -55,10 +63,13 @@ export function ensureMediaPicker() {
 
 export async function openMediaPicker(targetUsage) {
   if (publicationState.role === "viewer") {
-    showToast("Leitura apenas. Seu perfil não permite enviar ou selecionar mídias.", "error");
+    showToast("Leitura apenas. Seu perfil nao permite enviar ou selecionar midias.", "error");
     return;
   }
+  if (isPublicationUploadBusy()) return;
+
   ensureMediaPicker();
+  currentTargetUsage = targetUsage || getPublicationTarget();
   const picker = document.getElementById("editorialMediaPicker");
   picker.classList.add("is-open");
   picker.setAttribute("aria-hidden", "false");
@@ -66,7 +77,7 @@ export async function openMediaPicker(targetUsage) {
   libraryPage = 1;
   currentSearch = "";
   document.getElementById("mediaPickerSearch").value = "";
-  await loadLibraryItems(targetUsage);
+  await loadLibraryItems(currentTargetUsage);
 }
 
 export function closeMediaPicker() {
@@ -88,16 +99,14 @@ async function loadLibraryItems(targetUsage) {
     showToast(result.error.message, "error");
     libraryItems = [];
   } else {
-    // Filtragem cliente de busca
     let data = result.data || [];
     if (currentSearch.trim()) {
-      const q = currentSearch.toLowerCase();
-      data = data.filter(item =>
-        String(item.display_name || item.original_filename || "").toLowerCase().includes(q)
+      const query = currentSearch.toLowerCase();
+      data = data.filter((item) =>
+        String(item.display_name || item.original_filename || "").toLowerCase().includes(query)
       );
     }
-    
-    // Paginação
+
     const start = (libraryPage - 1) * libraryPageSize;
     libraryItems = data.slice(start, start + libraryPageSize);
     libraryHasMore = data.length > start + libraryPageSize;
@@ -117,63 +126,39 @@ function renderGrid() {
   }
 
   if (!libraryItems.length) {
-    grid.innerHTML = `<div class="media-picker-empty">Nenhuma imagem encontrada. Faça um upload acima ou limpe a busca.</div>`;
+    grid.innerHTML = `<div class="media-picker-empty">Nenhuma imagem encontrada. Faca um upload acima ou limpe a busca.</div>`;
     return;
   }
 
   grid.innerHTML = `
     <div class="media-picker-grid">
-      ${libraryItems.map(item => {
-        const url = item.thumbnail_url || item.card_url || item.delivery_url || item.secure_url || "";
-        return `
-          <button class="media-picker-card" type="button" data-media-id="${item.id}">
-            <div class="media-picker-img-wrapper">
-              <img src="${url}" alt="${item.alt_text || item.display_name || ''}" loading="lazy" decoding="async">
-            </div>
-            <span class="media-picker-card-title">${item.display_name || item.original_filename || 'Imagem'}</span>
-            <span class="media-picker-card-meta">${item.format?.toUpperCase()} • ${(item.bytes / 1024 / 1024).toFixed(2)}MB</span>
-          </button>
-        `;
-      }).join("")}
+      ${libraryItems.map(renderMediaCard).join("")}
     </div>
   `;
 
-  // Listener para selecionar
-  grid.querySelectorAll(".media-picker-card").forEach(card => {
+  grid.querySelectorAll(".media-picker-card").forEach((card) => {
     card.addEventListener("click", () => {
       const mediaId = card.dataset.mediaId;
-      const asset = libraryItems.find(item => String(item.id) === String(mediaId));
+      const asset = libraryItems.find((item) => String(item.id) === String(mediaId));
       if (asset) {
-        selectPickedAsset(asset);
+        applySelectedPublicationAsset(asset);
+        closeMediaPicker();
       }
     });
   });
 }
 
-function selectPickedAsset(asset) {
-  publicationState.selectedAsset = asset;
-  
-  // Atualizar preview no formulário
-  const previewImg = document.getElementById("formMediaPreviewImg");
-  const previewBox = document.getElementById("formMediaPreviewBox");
-  const noMediaBox = document.getElementById("formNoMediaBox");
-  const detailsNode = document.getElementById("formMediaDetails");
-
-  if (previewImg && previewBox && noMediaBox) {
-    previewImg.src = asset.card_url || asset.webp_url || asset.delivery_url || asset.secure_url || "";
-    previewBox.style.display = "flex";
-    noMediaBox.style.display = "none";
-  }
-
-  if (detailsNode) {
-    detailsNode.innerHTML = `
-      <strong>${asset.display_name || asset.original_filename}</strong>
-      <span>${asset.folder || ""}</span>
-      <span>${asset.width}x${asset.height}px</span>
-    `;
-  }
-
-  closeMediaPicker();
+function renderMediaCard(item) {
+  const url = getAssetThumbnailUrl(item);
+  return `
+    <button class="media-picker-card" type="button" data-media-id="${escapeHtml(item.id)}">
+      <div class="media-picker-img-wrapper">
+        ${url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(item.alt_text || item.display_name || "")}" loading="lazy" decoding="async">` : ""}
+      </div>
+      <span class="media-picker-card-title">${escapeHtml(item.display_name || item.original_filename || "Imagem")}</span>
+      <span class="media-picker-card-meta">${escapeHtml(formatMediaMeta(item))}</span>
+    </button>
+  `;
 }
 
 function renderPagination(targetUsage) {
@@ -181,46 +166,42 @@ function renderPagination(targetUsage) {
   if (!footer) return;
 
   footer.innerHTML = `
-    <button class="action-button secondary" id="btnMediaPickerPrev" ${libraryPage === 1 ? 'disabled' : ''}>Anterior</button>
-    <span>Página ${libraryPage}</span>
-    <button class="action-button secondary" id="btnMediaPickerNext" ${!libraryHasMore ? 'disabled' : ''}>Próxima</button>
+    <button class="action-button secondary" id="btnMediaPickerPrev" ${libraryPage === 1 ? "disabled" : ""}>Anterior</button>
+    <span>Pagina ${libraryPage}</span>
+    <button class="action-button secondary" id="btnMediaPickerNext" ${!libraryHasMore ? "disabled" : ""}>Proxima</button>
   `;
 
   document.getElementById("btnMediaPickerPrev").addEventListener("click", async () => {
     if (libraryPage > 1) {
-      libraryPage--;
+      libraryPage -= 1;
       await loadLibraryItems(targetUsage);
     }
   });
 
   document.getElementById("btnMediaPickerNext").addEventListener("click", async () => {
     if (libraryHasMore) {
-      libraryPage++;
+      libraryPage += 1;
       await loadLibraryItems(targetUsage);
     }
   });
 }
 
-function handleSearchInput(e) {
+function handleSearchInput(event) {
   clearTimeout(searchTimeout);
-  currentSearch = e.target.value;
+  currentSearch = event.target.value;
   searchTimeout = setTimeout(async () => {
     libraryPage = 1;
-    const formType = publicationState.activeType;
-    const target = formType === "hero_news" ? "hero" : formType === "actions" ? "actions" : "media";
-    await loadLibraryItems(target);
+    await loadLibraryItems(currentTargetUsage);
   }, 400);
 }
 
-async function handleDirectUpload(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
+async function handleDirectUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file || isPublicationUploadBusy()) return;
 
   const formType = publicationState.activeType;
-  const target = formType === "hero_news" ? "hero" : formType === "actions" ? "actions" : "media";
-
-  const btn = e.target.closest(".upload-btn");
-  const span = btn?.querySelector("span");
+  const target = getPublicationTarget(formType);
+  const span = event.target.closest(".upload-btn")?.querySelector("span");
   if (span) span.textContent = "Enviando...";
 
   try {
@@ -229,17 +210,43 @@ async function handleDirectUpload(e) {
       target,
       resourceType: "image",
       displayName: file.name,
-      altText: "",
-      assetType: formType
+      altText: document.getElementById("pub_image_alt")?.value || "",
+      assetType: formType,
+      onProgress: (status) => setPublicationUploadStatus(status)
     });
 
-    showToast("Upload concluído com sucesso!");
-    selectPickedAsset(result.mediaAsset);
-  } catch (err) {
-    console.error(err);
-    showToast(err.message || "Erro durante o upload.", "error");
+    applySelectedPublicationAsset(result.mediaAsset);
+    closeMediaPicker();
+    showToast("Upload concluido com sucesso!");
+  } catch (error) {
+    console.error("[PublicationMediaPickerUpload]", {
+      status: error?.name || "error",
+      message: error?.message || "upload_failed"
+    });
+    if (isMediaAssetRegistrationError(error)) {
+      showPendingMediaRegistration(error.retryContext, error.message);
+      closeMediaPicker();
+      showToast(error.message, "error");
+    } else {
+      setPublicationUploadStatus("error", error.message || "Erro durante o upload.");
+      showToast(error.message || "Erro durante o upload.", "error");
+    }
   } finally {
-    if (span) span.textContent = "Fazer Upload";
-    e.target.value = "";
+    if (span) span.textContent = "Fazer upload";
+    syncPublicationUploadControls();
+    event.target.value = "";
   }
+}
+
+function formatMediaMeta(item) {
+  const format = item.format ? String(item.format).toUpperCase() : "";
+  const size = Number(item.bytes || 0);
+  const sizeText = size ? `${(size / 1024 / 1024).toFixed(2)}MB` : "";
+  return [format, sizeText].filter(Boolean).join(" | ");
+}
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value ?? "");
+  return div.innerHTML;
 }

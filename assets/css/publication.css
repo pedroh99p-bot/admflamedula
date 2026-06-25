@@ -124,6 +124,11 @@
   word-break: break-all;
 }
 
+.media-error-text {
+  color: var(--danger);
+  font-weight: 700;
+}
+
 .media-no-preview {
   height: 140px;
   border: 2px dashed var(--border-strong);
@@ -224,7 +229,7 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 24px;
+  padding: 24px 24px calc(24px + env(safe-area-inset-bottom, 0px));
 }
 
 .editorial-modal-footer {
@@ -244,6 +249,39 @@
 .editorial-modal-footer .footer-actions {
   display: flex;
   gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .editorial-modal {
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .editorial-modal-panel {
+    max-width: none;
+  }
+
+  .editorial-modal-header,
+  .editorial-modal-body,
+  .editorial-modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .editorial-modal-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .editorial-modal-footer .footer-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .editorial-modal-footer .action-button {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Biblioteca de Mídia (Media Picker) */

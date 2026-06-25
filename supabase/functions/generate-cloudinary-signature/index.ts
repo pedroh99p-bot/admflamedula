@@ -17,6 +17,7 @@ const imageEagerTransformations = [
 
 const allowedResourceTypes = new Set(["image", "video"]);
 const allowedRoles = new Set(["super_admin", "admin", "operator"]);
+const allowedCmsRoles = new Set(["owner", "editor"]);
 
 function getCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin") || "";
@@ -115,6 +116,22 @@ Deno.serve(async (request) => {
 
   if (!profile || !allowedRoles.has(profile.role)) {
     return jsonResponse(request, { error: "Insufficient permission" }, 403);
+  }
+
+  const { data: cmsAccess, error: cmsAccessError } = await supabase
+    .from("admin_app_access")
+    .select("access_role, active")
+    .eq("user_id", userResult.user.id)
+    .eq("app_code", "cms")
+    .eq("active", true)
+    .maybeSingle();
+
+  if (cmsAccessError) {
+    return jsonResponse(request, { error: "Unable to validate CMS access" }, 403);
+  }
+
+  if (!cmsAccess || !allowedCmsRoles.has(cmsAccess.access_role)) {
+    return jsonResponse(request, { error: "Insufficient CMS permission" }, 403);
   }
 
   let body: { target?: string; resourceType?: string };
