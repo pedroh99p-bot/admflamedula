@@ -15,6 +15,7 @@ export function getPublicationTarget(type = publicationState.activeType) {
 }
 
 export function getPreferredAssetUrl(asset = {}) {
+  asset = asset || {};
   return asset.card_url
     || asset.webp_url
     || asset.preferred_delivery_url
@@ -26,6 +27,7 @@ export function getPreferredAssetUrl(asset = {}) {
 }
 
 export function getAssetThumbnailUrl(asset = {}) {
+  asset = asset || {};
   return asset.thumbnail_url
     || asset.card_url
     || asset.webp_url
@@ -193,6 +195,7 @@ export function normalizeMediaItemPayload(payload) {
 }
 
 function formatAssetMeta(asset) {
+  asset = asset || {};
   const size = asset.width && asset.height ? `${asset.width}x${asset.height}px` : "";
   const status = asset.optimization_status || "";
   return [size, status].filter(Boolean).join(" | ");
