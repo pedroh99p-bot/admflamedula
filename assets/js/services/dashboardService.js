@@ -4,10 +4,14 @@ import { listDonationIntents, listSupportLeads } from "./supportService.js";
 import { fetchTable } from "./supabaseService.js";
 
 function normalizeDonor(row) {
+  if (!row) return row;
   const bloodStatus = row.blood_donor_status || "";
   const marrowInterest = row.medula_interest || "";
   return {
     ...row,
+    blood_donor_status_raw: row.blood_donor_status,
+    redome_status_raw: row.redome_status,
+    medula_interest_raw: row.medula_interest,
     nome: row.nome,
     telefone: row.telefone,
     email: row.email,
@@ -28,21 +32,18 @@ function normalizeDonor(row) {
 }
 
 function normalizePatientCase(row) {
+  if (!row) return row;
   return {
     ...row,
     nome_paciente: row.patient_identifier || row.requester_name || "Caso sinalizado",
     telefone_responsavel: row.requester_phone,
     email: row.requester_email,
     diagnostico: row.campaign_context,
-    tipo_sanguineo: row.tipo_sanguineo || "",
     tipo_necessidade: row.need_type,
-    urgencia: row.urgency_level,
     necessita_medula: ["medula", "campanha_cadastro_medula"].includes(row.need_type),
     hospital: row.hospital,
     cidade: row.cidade,
     estado: row.estado,
-    nome_medico: "",
-    crm_medico: "",
     autorizacao_divulgacao: row.consent_authorized,
     usar_nome_paciente: false,
     mensagem_publica: row.campaign_context,
@@ -55,17 +56,31 @@ function normalizePatientCase(row) {
 }
 
 function normalizeDonationIntent(row) {
-  const amount = Number(row.custom_amount || row.amount || 0);
-  const name = row.donor_type === "company"
-    ? row.company_name || row.responsible_name || "Empresa"
-    : row.name || "Apoiador";
+  if (!row) return row;
+  const valor_raw = row.custom_amount ?? row.amount ?? null;
+  const metodo_raw = row.payment_method ?? null;
+  const tipo_raw = row.donation_type ?? null;
+
+  let name = "";
+  if (row.donor_type === "company") {
+    name = row.company_name || row.responsible_name || "Empresa";
+  } else {
+    name = row.name || "";
+  }
+  if (!name.trim()) {
+    name = "Apoiador cadastrado";
+  }
+
   return {
     ...row,
     nome: name,
     email: row.email,
     telefone: row.phone,
-    valor: amount,
-    metodo_pagamento: row.payment_method,
+    valor_raw,
+    metodo_raw,
+    tipo_raw,
+    valor: valor_raw !== null ? Number(valor_raw) : null,
+    metodo_pagamento: metodo_raw,
     status_pagamento: row.status,
     payment_id: row.provider_reference,
     origem: row.source,

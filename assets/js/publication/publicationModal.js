@@ -15,6 +15,10 @@ import {
   registerUploadedMediaAsset,
   uploadSignedMediaAsset
 } from "../services/cloudinaryService.js";
+import {
+  destroyCloudinaryUploadWidget,
+  openCloudinaryUploadWidget
+} from "../services/cloudinaryWidgetService.js";
 
 export function ensurePublicationModal() {
   let modal = document.getElementById("editorialModal");
@@ -40,6 +44,10 @@ export function ensurePublicationModal() {
         <div class="editorial-modal-body" id="editorialModalBody"></div>
         <footer class="editorial-modal-footer">
           <button class="action-button ghost" type="button" id="btnEditorialModalCancel">Cancelar</button>
+          <div class="modal-feedback-stack">
+            <div class="publication-inline-status" id="publicationUploadFeedback" hidden></div>
+            <div class="publication-inline-status" id="publicationSaveFeedback" hidden></div>
+          </div>
           <div class="footer-actions">
             <button class="action-button secondary" type="submit" id="btnSaveDraft">Salvar rascunho</button>
             <button class="action-button primary" type="submit" id="btnSavePublish">Salvar e publicar</button>
@@ -96,24 +104,29 @@ export function closePublicationModal() {
     modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("modal-open");
     publicationState.editorOpen = false;
+    destroyCloudinaryUploadWidget();
   }
 }
 
 function bindMediaControls() {
   const isViewer = publicationState.role === "viewer";
   const removeBtn = document.getElementById("btnRemoveMediaAsset");
+  const widgetBtn = document.getElementById("btnOpenCloudinaryWidget");
   const pickerBtn = document.getElementById("btnOpenMediaPicker");
   const directInput = document.getElementById("formDirectFileInput");
   const retryButton = document.getElementById("btnRetryMediaRegistration");
 
   if (isViewer) {
     if (removeBtn) removeBtn.style.display = "none";
+    if (widgetBtn) widgetBtn.style.display = "none";
     if (pickerBtn) pickerBtn.style.display = "none";
     if (directInput?.parentNode) directInput.parentNode.style.display = "none";
     if (retryButton) retryButton.style.display = "none";
     syncPublicationUploadControls();
     return;
   }
+
+  widgetBtn?.addEventListener("click", handleWidgetUpload);
 
   pickerBtn?.addEventListener("click", () => {
     if (isPublicationUploadBusy()) return;
@@ -128,6 +141,44 @@ function bindMediaControls() {
   directInput?.addEventListener("change", handleDirectUpload);
   retryButton?.addEventListener("click", retryMediaRegistration);
   syncPublicationUploadControls();
+}
+
+async function handleWidgetUpload() {
+  if (isPublicationUploadBusy()) return;
+
+  const formType = publicationState.activeType;
+  const target = getPublicationTarget(formType);
+
+  try {
+    const result = await openCloudinaryUploadWidget({
+      target,
+      altText: () => document.getElementById("pub_image_alt")?.value || "",
+      onStatus: (status, message) => setPublicationUploadStatus(status, message)
+    });
+
+    if (!result?.mediaAsset) {
+      setPublicationUploadStatus(publicationState.selectedAsset ? "ready" : "idle");
+      return;
+    }
+
+    applySelectedPublicationAsset(result.mediaAsset);
+    showToast("Imagem pronta para publicar.");
+  } catch (error) {
+    console.error("[PublicationWidgetUpload]", {
+      status: error?.name || "error",
+      message: error?.message || "widget_upload_failed"
+    });
+
+    if (isMediaAssetRegistrationError(error)) {
+      showPendingMediaRegistration(error.retryContext, error.message);
+      showToast(error.message, "error");
+    } else {
+      setPublicationUploadStatus("error", error.message || "Nao foi possivel enviar a imagem.");
+      showToast(error.message || "Nao foi possivel enviar a imagem.", "error");
+    }
+  } finally {
+    syncPublicationUploadControls();
+  }
 }
 
 async function handleDirectUpload(event) {

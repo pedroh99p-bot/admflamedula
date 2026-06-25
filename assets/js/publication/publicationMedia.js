@@ -6,7 +6,37 @@ const TYPE_TO_TARGET = {
   media_items: "media"
 };
 
-const BUSY_UPLOAD_STATES = new Set(["validating", "signing", "uploading", "saving_asset"]);
+const BUSY_UPLOAD_STATES = new Set([
+  "validating",
+  "signing",
+  "opening_widget",
+  "uploading",
+  "processing",
+  "registering",
+  "saving_asset"
+]);
+
+const UPLOAD_MESSAGES = {
+  idle: "",
+  validating: "Validando imagem...",
+  signing: "Gerando assinatura segura...",
+  opening_widget: "Abrindo seletor de imagens...",
+  uploading: "Enviando imagem...",
+  processing: "Processando imagem...",
+  registering: "Registrando no painel...",
+  saving_asset: "Registrando no painel...",
+  ready: "Imagem pronta para publicar.",
+  partial_error: "Imagem enviada, mas ainda nao registrada.",
+  error: "Nao foi possivel enviar a imagem."
+};
+
+const SAVE_MESSAGES = {
+  idle: "",
+  validating: "Validando campos...",
+  saving: "Salvando no Supabase...",
+  saved: "Alteracoes salvas.",
+  error: "Nao foi possivel salvar. Seus dados continuam aqui."
+};
 
 export function getPublicationTarget(type = publicationState.activeType) {
   const target = TYPE_TO_TARGET[type];
@@ -43,7 +73,17 @@ export function isPublicationUploadBusy() {
 
 export function setPublicationUploadStatus(status, message = "") {
   publicationState.uploadStatus = status;
-  publicationState.uploadError = status === "error" ? message : "";
+  publicationState.uploadMessage = message || UPLOAD_MESSAGES[status] || "";
+  publicationState.uploadError = status === "error" || status === "partial_error"
+    ? publicationState.uploadMessage
+    : "";
+  syncPublicationUploadControls();
+}
+
+export function setPublicationSaveStatus(status, message = "") {
+  publicationState.saveStatus = status;
+  publicationState.saveMessage = message || SAVE_MESSAGES[status] || "";
+  if (status === "saved") publicationState.lastSavedAt = new Date();
   syncPublicationUploadControls();
 }
 
@@ -53,19 +93,32 @@ export function syncPublicationUploadControls() {
   const draftButton = document.getElementById("btnSaveDraft");
   const publishButton = document.getElementById("btnSavePublish");
   const fileInput = document.getElementById("formDirectFileInput");
+  const widgetButton = document.getElementById("btnOpenCloudinaryWidget");
+  const widgetButtonLabel = document.getElementById("btnOpenCloudinaryWidgetLabel");
   const pickerButton = document.getElementById("btnOpenMediaPicker");
   const removeButton = document.getElementById("btnRemoveMediaAsset");
   const retryButton = document.getElementById("btnRetryMediaRegistration");
+  const legacyLabel = document.getElementById("legacyDirectUploadLabel");
+  const blockedByPendingRegistration = Boolean(publicationState.pendingMediaRegistration);
 
-  if (draftButton) draftButton.disabled = isViewer || busy || publicationState.saving;
-  if (publishButton) publishButton.disabled = isViewer || busy || publicationState.saving;
+  if (draftButton) draftButton.disabled = isViewer || busy || blockedByPendingRegistration || publicationState.saving;
+  if (publishButton) publishButton.disabled = isViewer || busy || blockedByPendingRegistration || publicationState.saving;
   if (fileInput) fileInput.disabled = isViewer || busy;
+  if (widgetButton) widgetButton.disabled = isViewer || busy;
   if (pickerButton) pickerButton.disabled = isViewer || busy;
   if (removeButton) removeButton.disabled = isViewer || busy;
+  if (legacyLabel) {
+    legacyLabel.hidden = window.FLAMEDULA_CONFIG?.ENABLE_LEGACY_DIRECT_UPLOAD !== true;
+  }
+  if (widgetButtonLabel) {
+    widgetButtonLabel.textContent = publicationState.selectedAsset ? "Trocar imagem" : "Selecionar imagem";
+  }
   if (retryButton) {
     retryButton.disabled = isViewer || busy || !publicationState.pendingMediaRegistration;
     retryButton.hidden = !publicationState.pendingMediaRegistration;
   }
+  syncPublicationUploadFeedback();
+  syncPublicationSaveFeedback();
 }
 
 export function clearSelectedPublicationAsset() {
@@ -120,7 +173,7 @@ export function updatePublicationPreview(asset) {
 export function showPendingMediaRegistration(context, message) {
   publicationState.pendingMediaRegistration = context || null;
   publicationState.selectedAsset = null;
-  setPublicationUploadStatus("error", message);
+  setPublicationUploadStatus("partial_error", message);
 
   const detailsNode = document.getElementById("formMediaDetails");
   const previewBox = document.getElementById("formMediaPreviewBox");
@@ -154,6 +207,40 @@ export function applyAssetToPayload(payload, asset, activeType) {
     payload.thumbnail_url = getAssetThumbnailUrl(asset) || null;
   }
   return payload;
+}
+
+export function syncPublicationUploadFeedback() {
+  const feedback = document.getElementById("publicationUploadFeedback");
+  if (!feedback) return;
+
+  const status = publicationState.uploadStatus || "idle";
+  const message = publicationState.uploadMessage || UPLOAD_MESSAGES[status] || "";
+  feedback.className = `publication-inline-status upload-status-${status}`;
+  feedback.hidden = !message;
+  feedback.innerHTML = message
+    ? `${renderStatusIcon(status)}<span>${escapeHtml(message)}</span>`
+    : "";
+}
+
+export function syncPublicationSaveFeedback() {
+  const feedback = document.getElementById("publicationSaveFeedback");
+  if (!feedback) return;
+
+  const status = publicationState.saveStatus || "idle";
+  let message = publicationState.saveMessage || SAVE_MESSAGES[status] || "";
+  if (status === "saved" && publicationState.lastSavedAt) {
+    const time = publicationState.lastSavedAt.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    message = `${message} as ${time}`;
+  }
+
+  feedback.className = `publication-inline-status save-status-${status}`;
+  feedback.hidden = !message;
+  feedback.innerHTML = message
+    ? `${renderStatusIcon(status)}<span>${escapeHtml(message)}</span>`
+    : "";
 }
 
 export function normalizeYouTubeUrl(value) {
@@ -199,6 +286,19 @@ function formatAssetMeta(asset) {
   const size = asset.width && asset.height ? `${asset.width}x${asset.height}px` : "";
   const status = asset.optimization_status || "";
   return [size, status].filter(Boolean).join(" | ");
+}
+
+function renderStatusIcon(status) {
+  if (status === "ready" || status === "saved") {
+    return `<span class="status-dot success" aria-hidden="true"></span>`;
+  }
+  if (status === "error" || status === "partial_error") {
+    return `<span class="status-dot error" aria-hidden="true"></span>`;
+  }
+  if (BUSY_UPLOAD_STATES.has(status) || status === "saving" || status === "processing" || status === "registering") {
+    return `<span class="status-spinner" aria-hidden="true"></span>`;
+  }
+  return `<span class="status-dot neutral" aria-hidden="true"></span>`;
 }
 
 function escapeHtml(value) {

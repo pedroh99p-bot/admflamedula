@@ -10,6 +10,11 @@ import {
   listAuditLogs
 } from "./api.js";
 import { bindAuthStateRedirect, handleLogout, requireAuth } from "./auth.js";
+import {
+  formatBloodDonorStatus,
+  formatRedomeStatus,
+  formatMarrowInterest
+} from "./services/donorService.js";
 import { renderDonationChart, renderOverviewCharts, renderRegionCharts } from "./charts.js";
 import { demoDonations, demoDonors, demoPatients } from "./demo-data.js";
 import { showToast } from "./toast.js";
@@ -59,6 +64,7 @@ const state = {
     estado: "",
     redome_status: "",
     medula_interest: "",
+    blood_donor_status: "",
     status: "",
     contato_whatsapp: "",
     segment: "all"
@@ -72,7 +78,11 @@ const state = {
     estado: "",
     tipo_sanguineo: ""
   },
-  donationFilter: "",
+  donationFilters: {
+    status: "",
+    metodo: "",
+    origem: ""
+  },
   demoMode: false,
   donors: [],
   patients: [],
@@ -257,8 +267,11 @@ function bindEvents() {
   bindFilter("donorRedomeFilter", "donorFilters", "redome_status");
   bindFilter("donorStatusFilter", "donorFilters", "status");
   bindFilter("donorMarrowFilter", "donorFilters", "medula_interest");
+  bindFilter("donorBloodFilter", "donorFilters", "blood_donor_status");
   bindFilter("donorWhatsappFilter", "donorFilters", "contato_whatsapp");
-  bindDonationFilter();
+  bindFilter("donationStatusFilter", "donationFilters", "status");
+  bindFilter("donationMethodFilter", "donationFilters", "metodo");
+  bindFilter("donationSourceFilter", "donationFilters", "origem");
 
   bindFilter("supportInterestFilter", "supportFilters", "interest");
   bindFilter("supportStatusFilter", "supportFilters", "status");
@@ -268,6 +281,7 @@ function bindEvents() {
       estado: "",
       redome_status: "",
       medula_interest: "",
+      blood_donor_status: "",
       status: "",
       contato_whatsapp: "",
       segment: state.donorFilters.segment
@@ -278,13 +292,14 @@ function bindEvents() {
       "donorRedomeFilter",
       "donorStatusFilter",
       "donorMarrowFilter",
+      "donorBloodFilter",
       "donorWhatsappFilter"
     ].forEach((id) => {
       const field = document.getElementById(id);
       if (field) field.value = "";
     });
 
-    renderAll();;
+    renderAll();
   });
 
   document.getElementById("btnClearSupportFilters")?.addEventListener("click", () => {
@@ -314,13 +329,6 @@ function bindFilter(id, group, key) {
   });
 }
 
-function bindDonationFilter() {
-  const field = document.getElementById("donationTypeFilter");
-  field?.addEventListener("change", () => {
-    state.donationFilter = field.value;
-    renderAll();
-  });
-}
 
 function toggleDemoMode(event) {
   state.demoMode = Boolean(event.target.checked);
@@ -424,37 +432,34 @@ function renderOverview() {
     patients.filter(p => new Date(p.created_at) >= sevenDaysAgo).length +
     donations.filter(dn => new Date(dn.created_at) >= sevenDaysAgo).length;
 
+  const totalDonors = donors.length;
+  const redomeYes = donors.filter(d => formatRedomeStatus(d.redome_status_raw) === "Sim").length;
+  const redomeNo = donors.filter(d => formatRedomeStatus(d.redome_status_raw) === "Não").length;
+  const marrowYes = donors.filter(d => formatMarrowInterest(d.medula_interest_raw) === "Sim").length;
+  const marrowMaybe = donors.filter(d => formatMarrowInterest(d.medula_interest_raw) === "Quero saber mais").length;
+  const marrowNo = donors.filter(d => formatMarrowInterest(d.medula_interest_raw) === "Não").length;
+  const bothUnk = donors.filter(d => formatRedomeStatus(d.redome_status_raw) === "Não informado" && formatMarrowInterest(d.medula_interest_raw) === "Não informado").length;
+
   renderMetrics("overviewMetrics", [
-    { label: "Total de doadores", value: donors.length, detail: "Pessoas cadastradas", icon: "users", tone: "red", featured: true },
-    { label: "Já são doadores", value: donors.filter(d => d.redome_status === "cadastrado").length, detail: "Cadastro REDOME", icon: "check-circle", tone: "red" },
-    { label: "Interessados", value: donors.filter(d => d.medula_interest === "sim").length, detail: "Querem se tornar doadores", icon: "heart", tone: "red" },
+    { label: "Total de cadastros", value: totalDonors, detail: "Pessoas na rede", icon: "users", tone: "red", featured: true },
+    { label: "Cadastrados no REDOME", value: redomeYes, detail: "Cadastro ativo", icon: "check-circle", tone: "red" },
+    { label: "Interessados em medula", value: marrowYes, detail: "Sim / Interessado", icon: "heart", tone: "red" },
+    { label: "Querem saber mais", value: marrowMaybe, detail: "Dúvidas pendentes", icon: "help-circle", tone: "yellow" },
+    { label: "Sem interesse", value: marrowNo, detail: "Declarado não", icon: "x-circle", tone: "yellow" },
+    { label: "Não informados", value: bothUnk, detail: "Campos nulos/vazios", icon: "alert-circle", tone: "blue" },
     { label: "Pacientes cadastrados", value: patients.length, detail: "Casos de pacientes", icon: "activity", tone: "blue" },
-    { label: "Ainda não são doadores", value: donors.filter(d => d.redome_status === "nao_cadastrado").length, detail: "Não cadastrados no REDOME", icon: "users-round", tone: "blue" },
-    { label: "Sem interesse", value: donors.filter(d => d.medula_interest === "nao").length, detail: "Ausência de intenção", icon: "x-circle", tone: "yellow" },
-    { label: "Aguardando contato", value: donors.filter(d => d.status === "novo").length, detail: "Doadores novos", icon: "clock", tone: "yellow" },
     { label: "Novos cadastros", value: recentCount, detail: "Últimos 7 dias", icon: "calendar-check", tone: "green" }
   ]);
 
   // Render funnel progress bars
-  const totalDonors = donors.length;
-  const jaDoadoresCount = donors.filter(d => d.redome_status === "cadastrado").length;
-  const aindaNaoCount = donors.filter(d => d.redome_status === "nao_cadastrado").length;
-  const interessadosCount = donors.filter(d => d.medula_interest === "sim").length;
-  const semInteresseCount = donors.filter(d => d.medula_interest === "nao").length;
-  const naoInformadosCount = donors.filter(d => {
-    const isRedomeUnk = !d.redome_status || d.redome_status === "nao_informado";
-    const isInterestUnk = !d.medula_interest || d.medula_interest === "nao_informado";
-    return isRedomeUnk && isInterestUnk;
-  }).length;
-
   const funnelContainer = document.getElementById("overviewFunnel");
   if (funnelContainer) {
     funnelContainer.innerHTML = `
-      ${makeFunnelBar("Já cadastrados no REDOME", jaDoadoresCount, totalDonors, "red")}
-      ${makeFunnelBar("Ainda não cadastrados no REDOME", aindaNaoCount, totalDonors, "blue")}
-      ${makeFunnelBar("Interessados em doar medula", interessadosCount, totalDonors, "green")}
-      ${makeFunnelBar("Sem interesse no momento", semInteresseCount, totalDonors, "yellow")}
-      ${makeFunnelBar("Informação não preenchida", naoInformadosCount, totalDonors, "gray")}
+      ${makeFunnelBar("Já cadastrados no REDOME", redomeYes, totalDonors, "red")}
+      ${makeFunnelBar("Ainda não cadastrados no REDOME", redomeNo, totalDonors, "blue")}
+      ${makeFunnelBar("Interessados em doar medula", marrowYes, totalDonors, "green")}
+      ${makeFunnelBar("Sem interesse no momento", marrowNo, totalDonors, "yellow")}
+      ${makeFunnelBar("Informação não preenchida", bothUnk, totalDonors, "gray")}
     `;
   }
 
@@ -574,13 +579,14 @@ function renderDonors() {
 function renderPatients() {
   const patients = getGlobalPatients();
   const sourceDetail = state.demoMode ? "Inclui FIC no front" : "Triagem ativa";
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
   renderMetrics("patientMetrics", [
-    { label: "Pacientes em analise", value: patients.filter((patient) => patient.status === "em_analise").length, detail: sourceDetail, icon: "clipboard", tone: "yellow" },
-    { label: "Pacientes urgentes", value: patients.filter((patient) => patient.status === "urgente").length, detail: "Prioridade clinica", icon: "alert-triangle", tone: "red", featured: true },
-    { label: "Precisam de medula", value: patients.filter((patient) => patient.necessita_medula).length, detail: "Demanda real", icon: "activity", tone: "blue" },
-    { label: "Hospitais cadastrados", value: uniqueSorted(patients, "hospital").length, detail: "Rede atendida", icon: "building", tone: "green" },
-    { label: "WhatsApp realizado", value: patients.filter((patient) => patient.contato_whatsapp_realizado).length, detail: "Contato com pacientes", icon: "message-circle", tone: "green" },
-    { label: "WhatsApp pendente", value: patients.filter((patient) => !patient.contato_whatsapp_realizado).length, detail: "Aguardando orientacao", icon: "clock", tone: "yellow" }
+    { label: "Total de pacientes", value: patients.length, detail: sourceDetail, icon: "clipboard", tone: "blue", featured: true },
+    { label: "Novos casos", value: patients.filter(p => new Date(p.created_at) >= sevenDaysAgo).length, detail: "Últimos 7 dias", icon: "calendar-check", tone: "green" },
+    { label: "Precisam de medula", value: patients.filter((patient) => patient.necessita_medula).length, detail: "Demanda real", icon: "activity", tone: "red" },
+    { label: "Hospitais cadastrados", value: uniqueSorted(patients.filter(p => p.hospital), "hospital").length, detail: "Rede atendida", icon: "building", tone: "green" }
   ]);
 
   const list = document.getElementById("patientsList");
@@ -594,18 +600,18 @@ function renderPatients() {
 
 function renderDonations() {
   const donations = getFilteredDonations();
-  const paidDonations = donations.filter(isConfirmedDonation);
-  const total = sumBy(paidDonations, "valor");
-  const potentialTotal = sumBy(donations, "valor");
-  const ranking = buildSupporterRanking(donations);
+  const allDonations = getDisplayDonations();
+  const confirmedDonations = allDonations.filter(isConfirmedDonation);
+  const totalConfirmedValue = sumBy(confirmedDonations, "valor");
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
   renderMetrics("donationMetrics", [
-    { label: "Intencoes registradas", value: donations.length, detail: state.demoMode ? "Real + FIC no front" : "Somente Supabase", icon: "receipt", tone: "blue" },
-    { label: "Valor potencial", value: potentialTotal, detail: "Soma das intencoes", icon: "dollar-sign", tone: "green", featured: true, format: "currency" },
-    { label: "Ticket medio", value: paidDonations.length ? total / paidDonations.length : 0, detail: "Media real", icon: "calculator", tone: "red", format: "currency" },
-    { label: "Recorrentes", value: donations.filter(isRecurringDonation).length, detail: "Pix/cartao/intencao", icon: "repeat", tone: "blue" },
-    { label: "Redirecionados", value: donations.filter(isPlatformDonation).length, detail: "Plataforma externa", icon: "external-link", tone: "yellow" },
-    { label: "Apoiadores no ranking", value: ranking.length, detail: "Agrupados por contato", icon: "trophy", tone: "green" }
+    { label: "Total de cadastros", value: allDonations.length, detail: "Cadastros no Apoie", icon: "users", tone: "blue", featured: true },
+    { label: "Novos cadastros", value: allDonations.filter(d => new Date(d.created_at) >= sevenDaysAgo).length, detail: "Últimos 7 dias", icon: "calendar-check", tone: "green" },
+    { label: "Aguardando PIX", value: allDonations.filter(d => d.status_pagamento === "pending_payment_setup").length, detail: "Pendente de pagamento", icon: "clock", tone: "yellow" },
+    { label: "Pagamentos confirmados", value: confirmedDonations.length, detail: "Transação concluída", icon: "check-circle", tone: "green" },
+    { label: "Valor confirmado", value: totalConfirmedValue, detail: "Soma de confirmados", icon: "dollar-sign", tone: "green", format: "currency" }
   ]);
 
   const list = document.getElementById("donationsList");
@@ -614,29 +620,22 @@ function renderDonations() {
   list.innerHTML = donations
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .map(renderDonationCard)
-    .join("") || emptyListState("Nenhuma doacao monetaria encontrada.");
+    .join("") || emptyListState("Nenhum cadastro de apoio encontrado.");
 
+  const ranking = buildSupporterRanking(donations);
   renderSupporterRanking(donations, ranking);
 }
 
 function renderDonorCard(donor) {
   const phoneAvailable = Boolean(getWhatsAppPhone(donor.telefone));
 
-  function translateRedome(status) {
-    if (status === 'cadastrado') return 'Sim';
-    if (status === 'nao_cadastrado') return 'Não';
-    return 'Não informado';
-  }
+  const redomeText = formatRedomeStatus(donor.redome_status_raw);
+  const interestText = formatMarrowInterest(donor.medula_interest_raw);
+  const bloodText = formatBloodDonorStatus(donor.blood_donor_status_raw);
 
-  function translateInterest(interest) {
-    if (interest === 'sim') return 'Sim';
-    if (interest === 'nao') return 'Não';
-    if (interest === 'quero_saber') return 'Quero saber mais';
-    return 'Não informado';
-  }
-
-  const redomeText = translateRedome(donor.redome_status);
-  const interestText = translateInterest(donor.medula_interest);
+  const redomeClass = redomeText === "Sim" ? "positive" : redomeText === "Não" ? "danger" : "info";
+  const interestClass = interestText === "Sim" ? "positive" : interestText === "Não" ? "danger" : interestText === "Quero saber mais" ? "warning" : "info";
+  const bloodClass = bloodText === "Sim" ? "positive" : bloodText === "Não" ? "danger" : "info";
 
   return `
     <article class="record-card">
@@ -654,8 +653,9 @@ function renderDonorCard(donor) {
         </div>
         <div class="record-badges">
           ${demoBadge(donor)}
-          <span class="badge ${donor.redome_status === 'cadastrado' ? "positive" : donor.redome_status === 'nao_cadastrado' ? "danger" : "info"}">Já é doador: ${redomeText}</span>
-          <span class="badge ${donor.medula_interest === 'sim' ? "positive" : donor.medula_interest === 'nao' ? "danger" : "info"}">Interesse em doar: ${interestText}</span>
+          <span class="badge ${bloodClass}">Doador de sangue: ${bloodText}</span>
+          <span class="badge ${redomeClass}">Cadastro no REDOME: ${redomeText}</span>
+          <span class="badge ${interestClass}">Interesse em doar medula: ${interestText}</span>
           <span class="badge ${donor.consent_lgpd === false ? "danger" : "positive"}">Contato: ${donor.consent_lgpd === false ? "Não autorizado" : "Autorizado"}</span>
           <span class="badge info">Preferência: ${escapeHtml(donor.contact_preference || "Não informado")}</span>
           <span class="badge info">Origem: ${escapeHtml(donor.origem || "-")}</span>
@@ -692,14 +692,11 @@ function renderPatientCard(patient) {
         <div class="record-meta">
           <span><i data-lucide="map-pin"></i>${escapeHtml(patient.cidade || "-")} / ${escapeHtml(patient.estado || "-")}</span>
           <span><i data-lucide="activity"></i>${escapeHtml(patient.diagnostico || "Necessidade não informada")}</span>
-          <span><i data-lucide="user-round"></i>${escapeHtml(patient.nome_medico || "Médico não informado")}</span>
         </div>
         <div class="record-badges">
           ${demoBadge(patient)}
           <span class="badge ${patient.necessita_medula ? "positive" : "info"}">Medula: ${yesNo(patient.necessita_medula)}</span>
           <span class="badge info">${escapeHtml(patient.tipo_necessidade || "Necessidade não informada")}</span>
-          <span class="badge ${patient.urgencia === "alta" ? "danger" : patient.urgencia === "media" ? "warning" : "info"}">Urgência: ${escapeHtml(patient.urgencia || "-")}</span>
-          <span class="badge ${patient.contato_whatsapp_realizado ? "positive" : "warning"}">${patient.contato_whatsapp_realizado ? "WhatsApp realizado" : "WhatsApp pendente"}</span>
           <span class="badge ${statusClass(patient.status)}">${getPatientStatusLabel(patient.status)}</span>
         </div>
       </div>
@@ -720,6 +717,22 @@ function renderPatientCard(patient) {
 function renderDonationCard(donation) {
   const phoneAvailable = Boolean(getWhatsAppPhone(donation.phone || donation.telefone));
   const type = getDonationTypeLabel(donation);
+  const isMinReg = donation.valor === null;
+
+  const badges = [demoBadge(donation)];
+  if (isMinReg) {
+    badges.push(`<span class="badge info">Apoiador cadastrado</span>`);
+  }
+  badges.push(`<span class="badge ${statusClass(donation.status_pagamento)}">${getPaymentStatusLabel(donation.status_pagamento)}</span>`);
+  badges.push(`<span class="badge info">Tipo: ${escapeHtml(type)}</span>`);
+  if (donation.tipo_raw) {
+    const isRec = isRecurringDonation(donation);
+    badges.push(`<span class="badge ${isRec ? "positive" : "info"}">${isRec ? "Recorrente" : "Apoio único"}</span>`);
+  }
+
+  const amountDisplay = isMinReg
+    ? `<span class="amount-chip" style="background: var(--gray-light); color: var(--text-muted); font-size: 0.8rem;">Valor não informado</span>`
+    : `<span class="amount-chip">${formatCurrency(donation.valor)}</span>`;
 
   return `
     <article class="record-card donation-card">
@@ -729,18 +742,15 @@ function renderDonationCard(donation) {
             <strong>${escapeHtml(donation.nome || "Apoiador sem nome")}</strong>
             <small>${escapeHtml(donation.email || donation.phone || donation.telefone || "Contato não informado")}</small>
           </div>
-          <span class="amount-chip">${formatCurrency(donation.valor)}</span>
+          ${amountDisplay}
         </div>
         <div class="record-meta">
-          <span><i data-lucide="credit-card"></i>${escapeHtml(donation.metodo_pagamento || "-")}</span>
+          <span><i data-lucide="credit-card"></i>${escapeHtml(donation.metodo_pagamento || "Não informado")}</span>
           <span><i data-lucide="calendar"></i>${formatDate(donation.created_at)}</span>
           <span><i data-lucide="phone"></i>${escapeHtml(donation.phone || donation.telefone || "-")}</span>
         </div>
         <div class="record-badges">
-          ${demoBadge(donation)}
-          <span class="badge ${statusClass(donation.status_pagamento)}">${getPaymentStatusLabel(donation.status_pagamento)}</span>
-          <span class="badge info">Tipo: ${escapeHtml(type)}</span>
-          <span class="badge ${isRecurringDonation(donation) ? "positive" : "info"}">${isRecurringDonation(donation) ? "Recorrente" : "Apoio único"}</span>
+          ${badges.filter(Boolean).join("")}
         </div>
       </div>
       <div class="record-actions">
@@ -878,10 +888,11 @@ function isConfirmedDonation(donation) {
 }
 
 function getDonationTypeLabel(donation) {
-  const method = normalizeText(donation.metodo_pagamento);
-  if (method.includes("pix")) return method.includes("recorrente") ? "Pix recorrente" : "Pix unico";
-  if (method.includes("cartao") || method === "card") return isRecurringDonation(donation) ? "Cartao recorrente" : "Cartao";
+  const method = normalizeText(donation.metodo_pagamento || donation.metodo_raw);
+  if (method.includes("pix")) return "PIX";
+  if (method.includes("cartao") || method === "card") return isRecurringDonation(donation) ? "Cartão recorrente" : "Cartão";
   if (method.includes("plataforma") || method.includes("platform")) return "Plataforma externa";
+  if (!method) return "Não informado";
   return "Apoio financeiro";
 }
 
@@ -1026,24 +1037,46 @@ function getFilteredDonors() {
   return getGlobalDonors().filter((donor) => {
     // 1. Filtro da sub-aba de segmento
     const segment = state.donorFilters.segment || "all";
-    if (segment === "ja_doadores" && donor.redome_status !== "cadastrado") return false;
-    if (segment === "ainda_nao" && donor.redome_status !== "nao_cadastrado") return false;
-    if (segment === "interessados" && donor.medula_interest !== "sim") return false;
-    if (segment === "sem_interesse" && donor.medula_interest !== "nao") return false;
+    const redomeFormatted = formatRedomeStatus(donor.redome_status_raw);
+    const marrowFormatted = formatMarrowInterest(donor.medula_interest_raw);
+    const bloodFormatted = formatBloodDonorStatus(donor.blood_donor_status_raw);
+
+    if (segment === "ja_doadores" && redomeFormatted !== "Sim") return false;
+    if (segment === "ainda_nao" && redomeFormatted !== "Não") return false;
+    if (segment === "interessados" && marrowFormatted !== "Sim") return false;
+    if (segment === "sem_interesse" && marrowFormatted !== "Não") return false;
     if (segment === "nao_informado") {
-      const isRedomeUnk = !donor.redome_status || donor.redome_status === "nao_informado";
-      const isInterestUnk = !donor.medula_interest || donor.medula_interest === "nao_informado";
+      const isRedomeUnk = redomeFormatted === "Não informado";
+      const isInterestUnk = marrowFormatted === "Não informado";
       if (!isRedomeUnk && !isInterestUnk) return false;
     }
 
     // 2. Filtros de campo selecionado
     const redome = state.donorFilters.redome_status;
     const interest = state.donorFilters.medula_interest;
+    const blood = state.donorFilters.blood_donor_status;
     const whatsapp = state.donorFilters.contato_whatsapp;
 
+    let redomeMatch = true;
+    if (redome === "cadastrado") redomeMatch = (redomeFormatted === "Sim");
+    else if (redome === "nao_cadastrado") redomeMatch = (redomeFormatted === "Não");
+    else if (redome === "nao_informado") redomeMatch = (redomeFormatted === "Não informado");
+
+    let interestMatch = true;
+    if (interest === "sim") interestMatch = (marrowFormatted === "Sim");
+    else if (interest === "nao") interestMatch = (marrowFormatted === "Não");
+    else if (interest === "quero_saber") interestMatch = (marrowFormatted === "Quero saber mais");
+    else if (interest === "nao_informado") interestMatch = (marrowFormatted === "Não informado");
+
+    let bloodMatch = true;
+    if (blood === "ja_doador") bloodMatch = (bloodFormatted === "Sim");
+    else if (blood === "nao_doador") bloodMatch = (bloodFormatted === "Não");
+    else if (blood === "nao_informado") bloodMatch = (bloodFormatted === "Não informado");
+
     return (!state.donorFilters.estado || donor.estado === state.donorFilters.estado)
-      && (!redome || donor.redome_status === redome)
-      && (!interest || donor.medula_interest === interest)
+      && redomeMatch
+      && interestMatch
+      && bloodMatch
       && (!state.donorFilters.status || donor.status === state.donorFilters.status)
       && (!whatsapp || donor.contato_whatsapp_realizado === (whatsapp === "realizado"));
   });
@@ -1070,33 +1103,44 @@ function getReportDonations() {
 }
 
 function getFilteredDonations() {
-  return getGlobalDonations().filter(matchesDonationFilter);
-}
+  return getGlobalDonations().filter((donation) => {
+    // 1. Filter by Status
+    const statusFilter = state.donationFilters.status;
+    if (statusFilter) {
+      if (statusFilter === "pending_payment_setup") {
+        if (donation.status_pagamento !== "pending_payment_setup") return false;
+      } else if (statusFilter === "confirmado") {
+        if (!isConfirmedDonation(donation)) return false;
+      } else if (statusFilter === "arquivado") {
+        if (donation.status_pagamento !== "arquivado" && donation.status_pagamento !== "canceled" && donation.status_pagamento !== "cancelado") return false;
+      }
+    }
 
-function matchesDonationFilter(donation) {
-  const filter = state.donationFilter;
-  if (!filter) return true;
+    // 2. Filter by Method
+    const methodFilter = state.donationFilters.metodo;
+    if (methodFilter) {
+      const method = normalizeText(donation.metodo_pagamento || donation.metodo_raw);
+      if (methodFilter === "pix" && !method.includes("pix")) return false;
+      if (methodFilter === "cartao" && !method.includes("cartao") && method !== "card") return false;
+      if (methodFilter === "plataforma" && !method.includes("plataforma") && !method.includes("platform")) return false;
+      if (methodFilter === "nao_informado" && method !== "") return false;
+    }
 
-  const method = normalizeText(donation.metodo_pagamento);
-  const status = normalizeText(donation.status_pagamento);
+    // 3. Filter by Origin
+    const originFilter = state.donationFilters.origem;
+    if (originFilter && donation.origem !== originFilter) return false;
 
-  const checks = {
-    pix: method.includes("pix"),
-    cartao: method.includes("cartao") || method === "card",
-    plataforma: method.includes("plataforma") || method.includes("platform") || status.includes("plataforma"),
-    recorrente: isRecurringDonation(donation),
-    pendente: status.includes("pendente") || status === "pending_payment_setup",
-    confirmado: status.includes("confirmado") || status === "pago" || status === "paid",
-    redirecionado: status.includes("redirecionado")
-  };
-
-  return Boolean(checks[filter]);
+    return true;
+  });
 }
 
 function populateFilters() {
   const donors = getDisplayDonors();
   setOptions("donorStateFilter", uniqueSorted(donors, "estado"), "Todos os estados");
   setOptions("donorStatusFilter", uniqueSorted(donors, "status"), "Todos os status", getDonorStatusLabel);
+
+  const donations = getDisplayDonations();
+  setOptions("donationSourceFilter", uniqueSorted(donations, "origem"), "Todas as origens");
 }
 
 function setOptions(id, values, placeholder, labelFn = (value) => value) {
@@ -1216,23 +1260,19 @@ function openDetails(type, id) {
       kicker: "Doador",
       title: record.nome || "Registro",
       fields: [
-        ["Email", record.email],
-        ["Telefone", record.telefone],
+        ["Email", record.email || "Não informado"],
+        ["Telefone", record.telefone || "Não informado"],
         ["Cidade/Estado", `${record.cidade || "-"} / ${record.estado || "-"}`],
-        ["Idade", record.idade],
-        ["Peso", record.peso ? `${record.peso} kg` : "-"],
-        ["Tipo sanguineo", record.tipo_sanguineo],
-        ["Ja doa sangue", yesNo(record.ja_doador_sangue)],
-        ["Quer doar sangue", yesNo(record.quer_doar_sangue)],
-        ["Quer doar medula", yesNo(record.quer_doar_medula)],
+        ["Bairro", record.bairro || "Não informado"],
+        ["Doador de sangue", formatBloodDonorStatus(record.blood_donor_status_raw)],
+        ["Cadastro no REDOME", formatRedomeStatus(record.redome_status_raw)],
+        ["Interesse em doar medula", formatMarrowInterest(record.medula_interest_raw)],
         ["Contato WhatsApp", record.contato_whatsapp_realizado ? "Realizado" : "Pendente"],
         ["Status", getDonorStatusLabel(record.status)],
-        ["Tipo de dado", isDemoRecord(record) ? "FIC - demonstracao front-end" : "Real - Supabase"],
-        ["Bairro", record.bairro || "-"],
-        ["Canal preferido", record.canal_preferido || "-"],
-        ["Opt-out", yesNo(record.opt_out)],
+        ["Canal preferido", record.canal_preferido || "Não informado"],
         ["Origem", record.origem || "-"],
-        ["Observacoes", record.observacoes || "-"],
+        ["Origem Seção", record.source_section || "Não informado"],
+        ["Observações", record.observacoes || "-"],
         ["Cadastro", formatDateTime(record.created_at)]
       ]
     },
@@ -1240,39 +1280,34 @@ function openDetails(type, id) {
       kicker: "Paciente",
       title: record.nome_paciente || "Registro",
       fields: [
-        ["Idade", record.idade],
-        ["Diagnostico", record.diagnostico],
-        ["Tipo sanguineo", record.tipo_sanguineo],
+        ["Diagnóstico", record.diagnostico || "-"],
         ["Necessita medula", yesNo(record.necessita_medula)],
-        ["Contato WhatsApp", record.contato_whatsapp_realizado ? "Realizado" : "Pendente"],
-        ["Hospital", record.hospital],
+        ["Hospital", record.hospital || "-"],
         ["Cidade/Estado", `${record.cidade || "-"} / ${record.estado || "-"}`],
-        ["Medico", record.nome_medico],
-        ["CRM", record.crm_medico],
-        ["Telefone responsavel", record.telefone_responsavel],
+        ["Telefone responsável", record.telefone_responsavel || "-"],
         ["Status", getPatientStatusLabel(record.status)],
         ["Tipo de dado", isDemoRecord(record) ? "FIC - demonstracao front-end" : "Real - Supabase"],
         ["Tipo necessidade", record.tipo_necessidade || "-"],
-        ["Urgencia", record.urgencia || "-"],
-        ["Autorizacao divulgacao", yesNo(record.autorizacao_divulgacao)],
+        ["Autorização divulgação", yesNo(record.autorizacao_divulgacao)],
         ["Origem", record.origem || "-"],
-        ["Observacoes", record.observacoes || "-"],
+        ["Origem Seção", record.source_section || "Não informado"],
+        ["Observações", record.observacoes || "-"],
         ["Cadastro", formatDateTime(record.created_at)]
       ]
     },
     donation: {
-      kicker: "Doacao monetaria",
+      kicker: "Cadastro do Apoie",
       title: record.nome || "Registro",
       fields: [
-        ["Email", record.email],
-        ["Telefone", record.telefone],
-        ["Valor", formatCurrency(record.valor)],
-        ["Metodo", record.metodo_pagamento],
-        ["Status", getPaymentStatusLabel(record.status_pagamento)],
+        ["Email", record.email || "Não informado"],
+        ["Telefone", record.telefone || "Não informado"],
+        ["Valor", record.valor !== null ? formatCurrency(record.valor) : "Valor não informado"],
+        ["Método", getDonationTypeLabel(record)],
+        ["Status do PIX", getPaymentStatusLabel(record.status_pagamento)],
         ["Tipo de dado", isDemoRecord(record) ? "FIC - demonstracao front-end" : "Real - Supabase"],
-        ["Interpretacao", getDonationTypeLabel(record)],
         ["Payment ID", record.payment_id || "-"],
         ["Origem", record.origem || "-"],
+        ["Origem Seção", record.source_section || "Não informado"],
         ["Data", formatDateTime(record.created_at)]
       ]
     },
@@ -1460,7 +1495,6 @@ function buildEntityFormMarkup(entityType, record, submitting) {
       ${renderTextField("Cidade", "cidade", record.cidade)}
       ${renderTextField("Estado", "estado", record.estado)}
       ${renderSelectField("Tipo de necessidade", "need_type", record.need_type || record.tipo_necessidade, ["sangue", "medula", "plaquetas", "campanha_cadastro_medula", "outro"])}
-      ${renderSelectField("Urgencia", "urgency_level", record.urgency_level || record.urgencia, ["baixa", "media", "alta"])}
       ${renderBooleanField("Divulgacao autorizada", "consent_authorized", record.consent_authorized || record.autorizacao_divulgacao)}
       ${renderSelectField("Status", "status", record.status, patientStatuses, getPatientStatusLabel)}
     `;
@@ -1650,8 +1684,6 @@ function buildMatchingModalMarkup(patient, matches) {
           ${summaryTile("Hospital", patient.hospital || "-")}
           ${summaryTile("Cidade/Estado", cityState)}
           ${summaryTile("Necessidade", patient.tipo_necessidade || "-")}
-          ${summaryTile("Urgencia", patient.urgencia || "-")}
-          ${summaryTile("Tipo sanguineo", patient.tipo_sanguineo || "-")}
           ${summaryTile("Total encontrados", formatNumber(matches.length))}
           ${summaryTile("Alta prioridade", formatNumber(groups.high.length))}
           ${summaryTile("Media prioridade", formatNumber(groups.medium.length))}
@@ -2583,7 +2615,7 @@ function renderMatching() {
 
   const searchQuery = document.getElementById("matchingPatientSearch")?.value || "";
   const patients = getGlobalPatients().filter(p =>
-    includesQuery(p, ["nome_paciente", "hospital", "cidade", "estado", "tipo_sanguineo"], searchQuery)
+    includesQuery(p, ["nome_paciente", "hospital", "cidade", "estado"], searchQuery)
   );
 
   list.innerHTML = patients.map(patient => {
@@ -2592,10 +2624,9 @@ function renderMatching() {
       <li class="${isSelected ? 'selected' : ''}" data-select-matching-patient-id="${escapeHtml(patient.id)}">
         <div class="matching-patient-item-header">
           <strong>${escapeHtml(patient.nome_paciente || "Caso sinalizado")}</strong>
-          <span class="badge ${patient.urgencia === 'alta' ? 'danger' : 'info'}">${escapeHtml(patient.urgencia || 'baixa')}</span>
+          <span class="badge info">${escapeHtml(patient.tipo_necessidade || "medula")}</span>
         </div>
         <div class="matching-patient-item-meta">
-          <span>${escapeHtml(patient.tipo_sanguineo || "-")}</span>
           <span>${escapeHtml(patient.hospital || "-")}</span>
         </div>
       </li>

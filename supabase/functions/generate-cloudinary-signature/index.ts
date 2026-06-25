@@ -18,6 +18,12 @@ const imageEagerTransformations = [
 const allowedResourceTypes = new Set(["image", "video"]);
 const allowedRoles = new Set(["super_admin", "admin", "operator"]);
 const allowedCmsRoles = new Set(["owner", "editor"]);
+const allowedWidgetSignatureKeys = new Set([
+  "timestamp",
+  "source",
+  "folder",
+  "upload_preset"
+]);
 
 function getCorsHeaders(request: Request) {
   const origin = request.headers.get("Origin") || "";
@@ -57,7 +63,7 @@ async function sha1Hex(value: string) {
     .join("");
 }
 
-function buildCloudinarySignature(params: Record<string, string | number>, apiSecret: string) {
+function buildCloudinarySignature(params: Record<string, string | number | boolean>, apiSecret: string) {
   const serialized = Object.entries(params)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
     .sort(([left], [right]) => left.localeCompare(right))
@@ -65,6 +71,47 @@ function buildCloudinarySignature(params: Record<string, string | number>, apiSe
     .join("&");
 
   return sha1Hex(`${serialized}${apiSecret}`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function sanitizeScalar(value: unknown): string | number | boolean | null {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  return null;
+}
+
+function sanitizeWidgetParams(
+  paramsToSign: Record<string, unknown>,
+  folder: string,
+  uploadPreset: string | null
+) {
+  const timestamp = sanitizeScalar(paramsToSign.timestamp);
+  if (!timestamp) {
+    throw new Error("Missing widget timestamp");
+  }
+
+  const sanitized: Record<string, string | number | boolean> = {};
+  for (const [key, rawValue] of Object.entries(paramsToSign)) {
+    if (!allowedWidgetSignatureKeys.has(key)) continue;
+    const value = sanitizeScalar(rawValue);
+    if (value === null) continue;
+    sanitized[key] = value;
+  }
+
+  sanitized.timestamp = timestamp;
+  sanitized.folder = folder;
+
+  if (uploadPreset) {
+    sanitized.upload_preset = uploadPreset;
+  } else {
+    delete sanitized.upload_preset;
+  }
+
+  return sanitized;
 }
 
 Deno.serve(async (request) => {
@@ -81,7 +128,8 @@ Deno.serve(async (request) => {
   const apiSecret = Deno.env.get("CLOUDINARY_API_SECRET");
   const uploadPreset = Deno.env.get("CLOUDINARY_UPLOAD_PRESET") || null;
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const supabasePublishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+  const supabasePublishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY")
+    || Deno.env.get("SUPABASE_ANON_KEY");
 
   if (!cloudName || !apiKey || !apiSecret || !supabaseUrl || !supabasePublishableKey) {
     return jsonResponse(request, { error: "Edge Function secrets are not configured" }, 500);
@@ -134,7 +182,7 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { error: "Insufficient CMS permission" }, 403);
   }
 
-  let body: { target?: string; resourceType?: string };
+  let body: { target?: string; resourceType?: string; paramsToSign?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -151,6 +199,34 @@ Deno.serve(async (request) => {
 
   if (!allowedResourceTypes.has(resourceType)) {
     return jsonResponse(request, { error: "Invalid resource type" }, 400);
+  }
+
+  if (isRecord(body.paramsToSign)) {
+    if (resourceType !== "image") {
+      return jsonResponse(request, { error: "Upload Widget only accepts image resources" }, 400);
+    }
+
+    let signatureParams: Record<string, string | number | boolean>;
+    try {
+      signatureParams = sanitizeWidgetParams(body.paramsToSign, folder, uploadPreset);
+    } catch (error) {
+      return jsonResponse(request, { error: error instanceof Error ? error.message : "Invalid widget params" }, 400);
+    }
+
+    const signature = await buildCloudinarySignature(signatureParams, apiSecret);
+
+    return jsonResponse(request, {
+      success: true,
+      signature,
+      apiKey,
+      cloudName,
+      timestamp: signatureParams.timestamp,
+      folder,
+      resourceType: "image",
+      target,
+      uploadPreset,
+      signedKeys: Object.keys(signatureParams).sort()
+    });
   }
 
   const timestamp = Math.round(Date.now() / 1000);

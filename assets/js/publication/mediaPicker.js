@@ -43,7 +43,7 @@ export function ensureMediaPicker() {
 
       <div class="media-picker-toolbar">
         <input type="search" id="mediaPickerSearch" placeholder="Buscar por nome da imagem..." class="search-input">
-        <label class="upload-btn">
+        <label class="upload-btn" id="mediaPickerLegacyUploadLabel" hidden>
           <input type="file" id="mediaPickerFileInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
           <span>Fazer upload</span>
         </label>
@@ -59,6 +59,7 @@ export function ensureMediaPicker() {
   document.getElementById("btnMediaPickerCloseBackdrop").addEventListener("click", closeMediaPicker);
   document.getElementById("mediaPickerFileInput").addEventListener("change", handleDirectUpload);
   document.getElementById("mediaPickerSearch").addEventListener("input", handleSearchInput);
+  syncLegacyUploadVisibility();
 }
 
 export async function openMediaPicker(targetUsage) {
@@ -77,7 +78,15 @@ export async function openMediaPicker(targetUsage) {
   libraryPage = 1;
   currentSearch = "";
   document.getElementById("mediaPickerSearch").value = "";
+  syncLegacyUploadVisibility();
   await loadLibraryItems(currentTargetUsage);
+}
+
+function syncLegacyUploadVisibility() {
+  const legacyUploadLabel = document.getElementById("mediaPickerLegacyUploadLabel");
+  if (legacyUploadLabel) {
+    legacyUploadLabel.hidden = window.FLAMEDULA_CONFIG?.ENABLE_LEGACY_DIRECT_UPLOAD !== true;
+  }
 }
 
 export function closeMediaPicker() {

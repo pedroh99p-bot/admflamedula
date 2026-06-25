@@ -1,2 +1,5 @@
 [functions.generate-cloudinary-signature]
 verify_jwt = true
+
+[functions.resolve-youtube-metadata]
+verify_jwt = true

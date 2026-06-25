@@ -120,19 +120,20 @@ export function getPatientStatusLabel(status) {
 
 export function getPaymentStatusLabel(status) {
   const newSchemaLabels = {
-    pending_payment_setup: "Cadastro recebido",
-    paid: "Pago",
+    pending_payment_setup: "Aguardando PIX",
+    paid: "Pagamento confirmado",
     failed: "Falhou",
-    canceled: "Cancelado"
+    canceled: "Cancelado",
+    arquivado: "Arquivado"
   };
   if (newSchemaLabels[status]) return newSchemaLabels[status];
   const labels = {
-    pago: "Pago",
+    pago: "Pagamento confirmado",
     pendente: "Pendente",
     cancelado: "Cancelado",
-    confirmado: "Confirmado",
-    confirmado_demo: "Confirmado demo",
-    intencao_recorrente: "Intencao recorrente",
+    confirmado: "Pagamento confirmado",
+    confirmado_demo: "Pagamento confirmado",
+    intencao_recorrente: "Intenção recorrente",
     redirecionado_plataforma: "Redirecionado plataforma"
   };
   return labels[status] || status || "-";

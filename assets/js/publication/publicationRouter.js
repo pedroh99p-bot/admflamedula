@@ -10,13 +10,20 @@ import {
 import { showToast } from "../toast.js";
 import {
   applyAssetToPayload,
+  clearSelectedPublicationAsset,
   getPreferredAssetUrl,
   isPublicationUploadBusy,
   normalizeMediaItemPayload,
+  setPublicationSaveStatus,
   syncPublicationUploadControls
 } from "./publicationMedia.js";
+import {
+  buildYouTubeMetadataFallback,
+  resolveYouTubeMetadata
+} from "../services/youtubeMetadataService.js";
 
 let initialized = false;
+let youtubeResolveTimeout = null;
 
 export async function initPublicationRouter(tabId) {
   const check = await checkCmsAccess();
@@ -245,6 +252,7 @@ function openCreateForm() {
     kicker: "Publicação",
     bodyMarkup
   });
+  bindMediaTypeControls();
 }
 
 function openEditForm(id) {
@@ -272,12 +280,132 @@ function openEditForm(id) {
     kicker: "Publicação",
     bodyMarkup
   });
+  bindMediaTypeControls();
+}
+
+function getMediaEditorType(item = {}) {
+  const type = String(item.type || "").toLowerCase();
+  if (type === "youtube" || item.youtube_id) return "youtube";
+  if (type === "image" || type === "card" || item.image_asset_id || item.image_url) return "image";
+  if (type === "link" || item.url) return "link";
+  return "youtube";
+}
+
+function getSelectedMediaType() {
+  return document.getElementById("pub_type")?.value || "youtube";
+}
+
+function bindMediaTypeControls() {
+  if (publicationState.activeType !== "media_items") return;
+
+  const typeSelect = document.getElementById("pub_type");
+  const youtubeInput = document.getElementById("pub_youtube_url");
+  if (!typeSelect) return;
+
+  typeSelect.addEventListener("change", () => {
+    if (typeSelect.value !== "image" && publicationState.selectedAsset) {
+      clearSelectedPublicationAsset();
+    }
+    syncMediaTypePanels();
+  });
+
+  youtubeInput?.addEventListener("input", () => {
+    clearTimeout(youtubeResolveTimeout);
+    youtubeResolveTimeout = setTimeout(() => resolveYouTubeFromInput(), 650);
+  });
+
+  youtubeInput?.addEventListener("paste", () => {
+    clearTimeout(youtubeResolveTimeout);
+    youtubeResolveTimeout = setTimeout(() => resolveYouTubeFromInput(), 100);
+  });
+
+  syncMediaTypePanels();
+}
+
+function syncMediaTypePanels() {
+  const type = getSelectedMediaType();
+  document.querySelectorAll("[data-media-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.mediaPanel !== type;
+  });
+
+  const imageSidebar = document.getElementById("imageEditorSidebar");
+  if (imageSidebar) imageSidebar.hidden = type !== "image";
+
+  const altInput = document.getElementById("pub_image_alt");
+  if (altInput) altInput.closest(".form-field-group").hidden = type !== "image";
+
+  syncPublicationUploadControls();
+}
+
+async function resolveYouTubeFromInput() {
+  if (publicationState.activeType !== "media_items" || getSelectedMediaType() !== "youtube") return;
+
+  const input = document.getElementById("pub_youtube_url");
+  const value = input?.value || "";
+  const fallback = buildYouTubeMetadataFallback(value);
+
+  if (!fallback) {
+    if (value.trim()) setYouTubeStatus("Cole uma URL valida do YouTube.", "error");
+    return;
+  }
+
+  setYouTubeStatus("Buscando informacoes do video...", "loading");
+
+  try {
+    const metadata = await resolveYouTubeMetadata(value);
+    applyYouTubeMetadata(metadata);
+    setYouTubeStatus(
+      metadata.fallback
+        ? "Nao foi possivel obter o titulo automaticamente. Voce pode preencher manualmente."
+        : "Video encontrado.",
+      metadata.fallback ? "warning" : "success"
+    );
+  } catch (error) {
+    applyYouTubeMetadata(fallback);
+    setYouTubeStatus(error.message || "Nao foi possivel obter o titulo automaticamente.", "warning");
+  }
+}
+
+function applyYouTubeMetadata(metadata) {
+  if (!metadata?.videoId) return;
+
+  const titleInput = document.getElementById("pub_title");
+  const urlInput = document.getElementById("pub_youtube_url");
+  const idInput = document.getElementById("pub_youtube_id");
+  const thumbInput = document.getElementById("pub_youtube_thumbnail_url");
+  const embedInput = document.getElementById("pub_youtube_embed_url");
+  const preview = document.getElementById("youtubePreview");
+  const previewFrame = preview?.querySelector(".youtube-preview-frame");
+  const previewTitle = document.getElementById("youtubePreviewTitle");
+  const previewAuthor = document.getElementById("youtubePreviewAuthor");
+
+  if (urlInput) urlInput.value = metadata.canonicalUrl || urlInput.value;
+  if (idInput) idInput.value = metadata.videoId;
+  if (thumbInput) thumbInput.value = metadata.thumbnailUrl || "";
+  if (embedInput) embedInput.value = metadata.embedUrl || "";
+  if (titleInput && metadata.title && !titleInput.value.trim()) titleInput.value = metadata.title;
+
+  if (preview && previewFrame && metadata.thumbnailUrl) {
+    preview.hidden = false;
+    previewFrame.innerHTML = `<img src="${escapeHtml(metadata.thumbnailUrl)}" alt="${escapeHtml(metadata.title || "Preview do video")}">`;
+  }
+  if (previewTitle) previewTitle.textContent = metadata.title || titleInput?.value || "Video do YouTube";
+  if (previewAuthor) previewAuthor.textContent = metadata.authorName || "";
+}
+
+function setYouTubeStatus(message, tone = "success") {
+  const status = document.getElementById("youtubeMetadataStatus");
+  if (!status) return;
+  status.hidden = !message;
+  status.className = `youtube-status ${tone}`;
+  status.textContent = message;
 }
 
 function buildFormFieldsMarkup(item) {
   const isHero = publicationState.activeType === "hero_news";
   const isAction = publicationState.activeType === "actions";
   const isMedia = publicationState.activeType === "media_items";
+  const mediaEditorType = isMedia ? getMediaEditorType(item) : "";
 
   let specificFields = "";
   if (isHero) {
@@ -355,6 +483,14 @@ function buildFormFieldsMarkup(item) {
   } else if (isMedia) {
     specificFields = `
       <div class="form-field-group">
+        <label for="pub_type">Tipo *</label>
+        <select id="pub_type" name="type" required>
+          <option value="youtube" ${mediaEditorType === "youtube" ? "selected" : ""}>Video do YouTube</option>
+          <option value="image" ${mediaEditorType === "image" ? "selected" : ""}>Imagem</option>
+          <option value="link" ${mediaEditorType === "link" ? "selected" : ""}>Link externo</option>
+        </select>
+      </div>
+      <div class="form-field-group">
         <label for="pub_title">Título *</label>
         <input type="text" id="pub_title" name="title" value="${escapeHtml(item.title || '')}" required>
       </div>
@@ -362,20 +498,35 @@ function buildFormFieldsMarkup(item) {
         <label for="pub_description">Descrição</label>
         <textarea id="pub_description" name="description" rows="3">${escapeHtml(item.description || '')}</textarea>
       </div>
-      <div class="form-field-row">
+      <div class="media-type-panel" id="youtubeMediaFields" data-media-panel="youtube">
         <div class="form-field-group">
-          <label for="pub_type">Tipo (ex: vídeo, card, banner)</label>
-          <input type="text" id="pub_type" name="type" value="${escapeHtml(item.type || '')}">
+          <label for="pub_youtube_url">Link do YouTube</label>
+          <input type="url" id="pub_youtube_url" name="url" value="${escapeHtml(item.url || '')}" placeholder="https://www.youtube.com/watch?v=...">
         </div>
+        <input type="hidden" id="pub_youtube_id" name="youtube_id" value="${escapeHtml(item.youtube_id || '')}">
+        <input type="hidden" id="pub_youtube_thumbnail_url" name="thumbnail_url" value="${escapeHtml(item.thumbnail_url || '')}">
+        <input type="hidden" id="pub_youtube_embed_url" name="embed_url" value="${escapeHtml(item.embed_url || '')}">
+        <div class="youtube-status" id="youtubeMetadataStatus" hidden></div>
+        <div class="youtube-preview" id="youtubePreview" ${item.thumbnail_url ? "" : "hidden"}>
+          <div class="youtube-preview-frame">
+            ${item.thumbnail_url ? `<img src="${escapeHtml(item.thumbnail_url)}" alt="${escapeHtml(item.title || 'Preview do video')}">` : ""}
+          </div>
+          <div class="youtube-preview-meta">
+            <strong id="youtubePreviewTitle">${escapeHtml(item.title || "Video do YouTube")}</strong>
+            <span id="youtubePreviewAuthor"></span>
+          </div>
+        </div>
+      </div>
+      <div class="media-type-panel" id="externalMediaFields" data-media-panel="link">
         <div class="form-field-group">
-          <label for="pub_category">Categoria</label>
-          <input type="text" id="pub_category" name="category" value="${escapeHtml(item.category || '')}">
+          <label for="pub_external_url">URL externa</label>
+          <input type="url" id="pub_external_url" name="external_url" value="${mediaEditorType === "link" ? escapeHtml(item.url || "") : ""}">
         </div>
       </div>
       <div class="form-field-row">
         <div class="form-field-group">
-          <label for="pub_url">URL Externa (Opcional)</label>
-          <input type="url" id="pub_url" name="url" value="${escapeHtml(item.url || '')}">
+          <label for="pub_category">Categoria</label>
+          <input type="text" id="pub_category" name="category" value="${escapeHtml(item.category || '')}">
         </div>
         <div class="form-field-group">
           <label for="pub_sort_order">Ordem</label>
@@ -385,7 +536,8 @@ function buildFormFieldsMarkup(item) {
     `;
   }
 
-  const hasMedia = Boolean(publicationState.selectedAsset || item.image_url);
+  const showImageWidget = !isMedia || mediaEditorType === "image";
+  const hasMedia = showImageWidget && Boolean(publicationState.selectedAsset || item.image_url || item.thumbnail_url);
   const mediaUrl = getPreferredAssetUrl(publicationState.selectedAsset) || item.image_url || item.thumbnail_url || "";
 
   return `
@@ -394,7 +546,7 @@ function buildFormFieldsMarkup(item) {
         ${specificFields}
       </div>
       
-      <div class="form-columns-sidebar">
+      <div class="form-columns-sidebar" id="imageEditorSidebar" ${showImageWidget ? "" : "hidden"}>
         <div class="media-box-widget">
           <span class="widget-label">Imagem Associada</span>
           
@@ -409,12 +561,15 @@ function buildFormFieldsMarkup(item) {
           </div>
 
           <div class="media-widget-actions">
-            <button type="button" class="action-button secondary compact-btn" id="btnOpenMediaPicker">Escolher da Biblioteca</button>
-            <label class="action-button secondary compact-btn" style="display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin: 0;">
+            <button type="button" class="action-button primary compact-btn" id="btnOpenCloudinaryWidget">
+              <span id="btnOpenCloudinaryWidgetLabel">${publicationState.selectedAsset ? "Trocar imagem" : "Selecionar imagem"}</span>
+            </button>
+            <button type="button" class="action-button secondary compact-btn" id="btnOpenMediaPicker">Biblioteca</button>
+            <label class="action-button secondary compact-btn" id="legacyDirectUploadLabel" hidden style="display: inline-flex; align-items: center; justify-content: center; cursor: pointer; margin: 0;">
               <input type="file" id="formDirectFileInput" accept="image/jpeg,image/png,image/webp" style="display:none;">
               <span id="formDirectUploadSpan">Enviar Imagem</span>
             </label>
-            <button type="button" class="action-button ghost danger-text compact-btn" id="btnRemoveMediaAsset">Remover</button>
+            <button type="button" class="action-button ghost danger-text compact-btn" id="btnRemoveMediaAsset">Remover selecao</button>
             <button type="button" class="action-button secondary compact-btn" id="btnRetryMediaRegistration" hidden>Tentar registrar novamente</button>
           </div>
         </div>
@@ -448,10 +603,17 @@ async function handleSaveForm(isPublish) {
     showToast("Aguarde o envio da imagem terminar antes de salvar.", "error");
     return;
   }
+  if (publicationState.pendingMediaRegistration) {
+    setPublicationSaveStatus("error", "Registre a imagem no painel antes de salvar.");
+    showToast("Imagem enviada, mas ainda nao registrada no painel.", "error");
+    return;
+  }
 
+  setPublicationSaveStatus("validating");
   const titleInput = form.querySelector("[name='title']");
   if (!titleInput || !titleInput.value.trim()) {
-    showToast("O título é obrigatório.", "error");
+    setPublicationSaveStatus("error", "O titulo e obrigatorio.");
+    showToast("O titulo e obrigatorio.", "error");
     titleInput?.focus();
     return;
   }
@@ -477,15 +639,46 @@ async function handleSaveForm(isPublish) {
     payload.cta_label = form.querySelector("[name='cta_label']")?.value || null;
     payload.cta_url = form.querySelector("[name='cta_url']")?.value || null;
   } else if (activeType === "media_items") {
+    const mediaType = getSelectedMediaType();
     payload.description = form.querySelector("[name='description']")?.value || null;
-    payload.type = form.querySelector("[name='type']")?.value || null;
     payload.category = form.querySelector("[name='category']")?.value || null;
-    payload.url = form.querySelector("[name='url']")?.value || null;
-    payload.youtube_id = null;
+    payload.type = mediaType === "image" ? "card" : mediaType;
+
+    if (mediaType === "youtube") {
+      const fallback = buildYouTubeMetadataFallback(form.querySelector("[name='url']")?.value || "");
+      if (!fallback) {
+        setPublicationSaveStatus("error", "Cole uma URL valida do YouTube.");
+        showToast("Cole uma URL valida do YouTube.", "error");
+        return;
+      }
+      payload.url = fallback.canonicalUrl;
+      payload.youtube_id = form.querySelector("[name='youtube_id']")?.value || fallback.videoId;
+      payload.thumbnail_url = form.querySelector("[name='thumbnail_url']")?.value || fallback.thumbnailUrl;
+      payload.image_asset_id = null;
+      payload.image_url = null;
+      payload.cloudinary_public_id = null;
+    } else if (mediaType === "link") {
+      payload.url = form.querySelector("[name='external_url']")?.value || null;
+      payload.youtube_id = null;
+      payload.thumbnail_url = null;
+      payload.image_asset_id = null;
+      payload.image_url = null;
+      payload.cloudinary_public_id = null;
+    } else {
+      const hasExistingImage = Boolean(publicationState.formData?.image_asset_id || publicationState.formData?.image_url);
+      if (!publicationState.selectedAsset && !hasExistingImage) {
+        setPublicationSaveStatus("error", "Selecione uma imagem antes de salvar.");
+        showToast("Selecione uma imagem antes de salvar.", "error");
+        return;
+      }
+      payload.url = null;
+      payload.youtube_id = null;
+      if (publicationState.selectedAsset) payload.thumbnail_url = null;
+    }
   }
 
   // Associar imagem do Cloudinary
-  if (publicationState.selectedAsset) {
+  if (publicationState.selectedAsset && (activeType !== "media_items" || getSelectedMediaType() === "image")) {
     applyAssetToPayload(payload, publicationState.selectedAsset, activeType);
   } else {
     // Se removeu a imagem
@@ -504,26 +697,46 @@ async function handleSaveForm(isPublish) {
 
   const table = getTableFromType(activeType);
   publicationState.saving = true;
+  setPublicationSaveStatus("saving");
   syncPublicationUploadControls();
 
   try {
+    let savedRecord;
     if (publicationState.editorMode === "edit") {
-      await updatePublicationItem(table, publicationState.editingId, finalPayload);
-      showToast("Registro atualizado com sucesso!");
+      savedRecord = await updatePublicationItem(table, publicationState.editingId, finalPayload);
     } else {
-      await createPublicationItem(table, finalPayload);
-      showToast("Registro criado com sucesso!");
+      savedRecord = await createPublicationItem(table, finalPayload);
     }
 
-    closePublicationModal();
+    if (!savedRecord?.id) {
+      throw new Error("Supabase nao confirmou o registro salvo.");
+    }
+
+    const successMessage = getSaveSuccessMessage(isPublish);
+    setPublicationSaveStatus("saved", successMessage);
+    showToast(successMessage);
     await loadItems();
+    publicationState.saving = false;
+    syncPublicationUploadControls();
+    await wait(900);
+    closePublicationModal();
   } catch (err) {
     console.error(err);
-    showToast(err.message || "Erro ao salvar o registro.", "error");
+    setPublicationSaveStatus("error", "Nao foi possivel salvar. Seus dados continuam aqui.");
+    showToast(err.message || "Nao foi possivel salvar. Seus dados continuam aqui.", "error");
   } finally {
     publicationState.saving = false;
     syncPublicationUploadControls();
   }
+}
+
+function getSaveSuccessMessage(isPublish) {
+  if (publicationState.editorMode === "edit") return "Alteracoes salvas com sucesso";
+  return isPublish ? "Conteudo publicado com sucesso" : "Rascunho salvo com sucesso";
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function handleDeleteItem(id) {

@@ -56,12 +56,12 @@
           <span>Doadores</span>
         </button>
         <button class="nav-item" type="button" data-tab="patients">
-          <i data-lucide="activity"></i>
+          <i data-lucide="users"></i>
           <span>Pacientes</span>
         </button>
         <button class="nav-item" type="button" data-tab="donations">
-          <i data-lucide="heart"></i>
-          <span>Apoie</span>
+          <i data-lucide="heart-handshake"></i>
+          <span>Cadastros do Apoie</span>
         </button>
 
         <div class="sidebar-header" id="sidebarPubHeader" style="display: none;">Publicação</div>
@@ -242,6 +242,15 @@
               </select>
             </label>
             <label>
+              <span>Doador de Sangue</span>
+              <select id="donorBloodFilter">
+                <option value="">Todos</option>
+                <option value="ja_doador">Sim</option>
+                <option value="nao_doador">Não</option>
+                <option value="nao_informado">Não informado</option>
+              </select>
+            </label>
+            <label>
               <span>Status Operacional</span>
               <select id="donorStatusFilter"></select>
             </label>
@@ -302,15 +311,10 @@
                 <thead>
                   <tr>
                     <th>Paciente</th>
-                    <th>Idade</th>
                     <th>Diagnóstico</th>
                     <th>Hospital</th>
                     <th>Cidade/Estado</th>
-                    <th>Tipo sanguíneo</th>
                     <th>Necessita medula</th>
-                    <th>Contato WhatsApp</th>
-                    <th>Médico</th>
-                    <th>CRM</th>
                     <th>Status</th>
                     <th>Ações</th>
                   </tr>
@@ -325,7 +329,7 @@
         <section class="tab-panel" id="tab-donations" data-title="Cadastros do Apoie" data-kicker="Apoio e engajamento">
           <div class="section-heading">
             <div>
-              <h2>Pessoas cadastradas</h2>
+              <h2>Cadastros do Apoie</h2>
               <p>Registros carregados a partir de donation_intents</p>
             </div>
           </div>
@@ -334,12 +338,28 @@
 
           <div class="filters-grid donation-filters-grid">
             <label>
-              <span>Filtro por Método</span>
-              <select id="donationTypeFilter">
+              <span>Filtro por Status</span>
+              <select id="donationStatusFilter">
                 <option value="">Todos</option>
-                <option value="pix">Pix</option>
+                <option value="pending_payment_setup">Aguardando PIX</option>
+                <option value="confirmado">Pagamento confirmado</option>
+                <option value="arquivado">Arquivado</option>
+              </select>
+            </label>
+            <label>
+              <span>Filtro por Método</span>
+              <select id="donationMethodFilter">
+                <option value="">Todos</option>
+                <option value="pix">PIX</option>
                 <option value="cartao">Cartão</option>
                 <option value="plataforma">Plataforma</option>
+                <option value="nao_informado">Não informado</option>
+              </select>
+            </label>
+            <label>
+              <span>Filtro por Origem</span>
+              <select id="donationSourceFilter">
+                <option value="">Todos</option>
               </select>
             </label>
           </div>

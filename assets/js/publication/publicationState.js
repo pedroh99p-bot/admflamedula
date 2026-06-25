@@ -11,7 +11,11 @@ export const publicationState = {
   pendingMediaRegistration: null,
   uploadStatus: "idle",
   uploadError: "",
+  uploadMessage: "",
   saving: false,
+  saveStatus: "idle",
+  saveMessage: "",
+  lastSavedAt: null,
   role: "viewer", // 'owner', 'editor', 'viewer'
   page: 1,
   pageSize: 10,
@@ -27,5 +31,9 @@ export function resetPublicationEditorState() {
   publicationState.pendingMediaRegistration = null;
   publicationState.uploadStatus = "idle";
   publicationState.uploadError = "";
+  publicationState.uploadMessage = "";
   publicationState.saving = false;
+  publicationState.saveStatus = "idle";
+  publicationState.saveMessage = "";
+  publicationState.lastSavedAt = null;
 }

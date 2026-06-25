@@ -10,7 +10,6 @@ function normalizePatientCase(row) {
     telefone_responsavel: row.requester_phone,
     diagnostico: row.campaign_context,
     tipo_necessidade: row.need_type,
-    urgencia: row.urgency_level,
     necessita_medula: ["medula", "campanha_cadastro_medula"].includes(row.need_type),
     autorizacao_divulgacao: row.consent_authorized,
     mensagem_publica: row.campaign_context,
